@@ -131,7 +131,7 @@ data_contour = [
 
 def update_plot(data_source, leverage, TER, LIBOR):
     # update data
-    if data_source == "heatmap":
+    if data_source == "Heatmap":
         fig = go.FigureWidget(data=data)
     else:
         fig = go.FigureWidget(data=data_contour)
