@@ -20,11 +20,6 @@ import plotly.graph_objects as go
 
 import streamlit as st
 
-import dash
-from dash import dcc
-from dash import html
-from dash.dependencies import Input, Output
-
 
 # define the mathematical functions
 def leveraged_return(
