@@ -184,7 +184,7 @@ if __name__ == "__main__":
 
     # Header for the Kelly Criterion
     st.markdown("", unsafe_allow_html=True)
-    st.write("## Kelly Criterion Calculator")
+    st.write("## [Kelly Criterion](https://rhsfinancial.com/2017/06/20/line-aggressive-crazy-leverage/) Calculator")
     # Text input for yearly expected return
     yearly_er = st.number_input("Yearly Expected Return [%]", value=0.037 * 252)
     # Text input for yearly risk free rate
