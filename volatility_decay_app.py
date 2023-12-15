@@ -197,7 +197,7 @@ if __name__ == "__main__":
 
     # Header for the plot
     st.markdown("", unsafe_allow_html=True)
-    st.write("## Visualize the Gain over Unleveraged ETF")
+    st.write("## Visualized Gain over Unleveraged ETF")
     # Dropdown for the plot style
     data_source = st.selectbox("Plot Style", ["Heatmap", "Contour"], index=0)
     # Slider for leverage
