@@ -1,1 +1,0 @@
-# volatility_decay_app
