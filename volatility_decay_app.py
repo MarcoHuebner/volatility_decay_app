@@ -1,8 +1,5 @@
 """
-This module contains the code for the volatility decay dashboard.
-
-Required libraries:
-pip install dash dash-core-components dash-html-components dash-renderer
+This module contains the code for the volatility decay Streamlit App.
 
 Based on a [reddit](https://www.reddit.com/r/HFEA/comments/tue7n6/the_volatility_decay_equation_with_verification/) 
 post, make an interactive visualization to show the effect of the volatility decay.
@@ -12,6 +9,12 @@ The results show the (somewhat) quadratic (/ logarithmic) volatility drag along 
 describing the quadratic behaviour:
 - [Blogpost](https://www.afrugaldoctor.com/home/leveraged-etfs-and-volatility-decay-part-2)
 - [(Detailed) Journal Article, also mentioned in the Blogpost](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=1664823)
+
+requirements.txt:
+plotly
+numpy
+streamlit
+ipywidgets>=7.0.0
 
 """
 
@@ -95,23 +98,25 @@ def update_result(a, b, c):
     # NOTE: the factor of 252 corrects for the daily values
     return f"#### Kelly Fraction f: {100 * (a - b) / c**2:.2f}"
 
+
 # define parameters (except for leverage all in percent)
 lev_r = 2.0
 exp_r = 0.6
 libor = 0.5
-# define heatmap marginals (-50% - 50% underlying CAGR, 0-100% annualized volatility)
+# define heatmap marginals (-50% - 50% underlying CAGR, 0-50% annualized volatility)
 cagr_underlying = np.linspace(-50, 50, 200)
-volatility_undr = np.linspace(0.0, 100, 100)
+volatility_undr = np.linspace(0.0, 50, 100)
 
 # define the data
+zmin, zmax = -15, 20
 data = [
     go.Heatmap(
         x=cagr_underlying,
         y=volatility_undr,
         z=leveraged_return_mesh(lev_r, cagr_underlying, exp_r, libor, volatility_undr),
-        zmax=20,
+        zmax=zmax,
         zmid=0,
-        zmin=-15,
+        zmin=zmin,
         colorscale="RdBu",
         colorbar=dict(title="Gain over Unleveraged ETF [%]", titleside="right"),
     )
@@ -121,15 +126,18 @@ data_contour = [
         x=cagr_underlying,
         y=volatility_undr,
         z=leveraged_return_mesh(lev_r, cagr_underlying, exp_r, libor, volatility_undr),
-        zmax=20,
+        zmax=zmax,
         zmid=0,
-        zmin=-15,
+        zmin=zmin,
         colorscale="RdBu",
         colorbar=dict(title="Gain over Unleveraged ETF [%]", titleside="right"),
     )
 ]
 
+
 def update_plot(data_source, leverage, TER, LIBOR):
+    # rescale the leverage factor
+    leverage /= 100
     # update data
     if data_source == "Heatmap":
         fig = go.FigureWidget(data=data)
@@ -142,13 +150,13 @@ def update_plot(data_source, leverage, TER, LIBOR):
     # update layout
     fig.update_layout(
         title="Visualized Gain over Unleveraged ETF",
-        title_x=0.35,  # Center the title
         title_font=dict(size=24),
         xaxis_title="CAGR Underlying [%]",
         yaxis_title="Volatility [%]",
     )
 
     return fig
+
 
 if __name__ == "__main__":
     # define the layout
@@ -159,7 +167,7 @@ if __name__ == "__main__":
         .header {
             background: linear-gradient(to right, #67001f, #053061);
             padding: 2em;
-            color: white;
+            color: white !important;
             max-width: 100%;
             text-align: center;
         }
@@ -184,27 +192,35 @@ if __name__ == "__main__":
 
     # Header for the Kelly Criterion
     st.markdown("", unsafe_allow_html=True)
-    st.write("## [Kelly Criterion](https://rhsfinancial.com/2017/06/20/line-aggressive-crazy-leverage/) Calculator")
+    st.write(
+        "## Annualized [Kelly Criterion](https://rhsfinancial.com/2017/06/20/line-aggressive-crazy-leverage/) Calculator"
+    )
     # Text input for yearly expected return
-    yearly_er = st.number_input("Yearly Expected Return [%]", value=0.037 * 252)
+    yearly_er = st.number_input("Expected Yearly Return [%]", value=0.037 * 252)
     # Text input for yearly risk free rate
-    yearly_risk_free = st.number_input("Yearly Risk Free Rate", value=0.005 * 252)
+    yearly_risk_free = st.number_input("Risk Free Yearly Return [%]", value=0.005 * 252)
     # Text input for yearly return volatility
-    yearly_volatility = st.number_input("Yearly Return Volatility [%]", value=1.2 * np.sqrt(252))
+    yearly_volatility = st.number_input(
+        "Annualized Volatility of the Underlying [%]", value=1.2 * np.sqrt(252)
+    )
     # Display the result
     result = update_result(yearly_er, yearly_risk_free, yearly_volatility)
     st.write(result)
 
     # Header for the plot
     st.markdown("", unsafe_allow_html=True)
-    st.write("## Visualized Gain over Unleveraged ETF")
+    st.write("## Visualize the Gain over Unleveraged ETF")
     # Dropdown for the plot style
     data_source = st.selectbox("Plot Style", ["Heatmap", "Contour"], index=0)
     # Slider for leverage
-    leverage = st.slider("Leverage", min_value=0.0, max_value=10.0, value=lev_r, step=0.5)
+    leverage = st.slider(
+        "Leverage [%]", min_value=0.0, max_value=1000.0, value=lev_r * 100, step=10.0
+    )
     # Slider for TER
-    ter = st.slider("TER", min_value=0.0, max_value=1.0, value=exp_r, step=0.05)
+    ter = st.slider("TER [%]", min_value=0.0, max_value=2.0, value=exp_r, step=0.05)
     # Slider for LIBOR
-    libor = st.slider("LIBOR", min_value=0.0, max_value=3.0, value=libor, step=0.25)
+    libor = st.slider("LIBOR [%]", min_value=0.0, max_value=4.0, value=libor, step=0.1)
     # Placeholder for the graph
-    st.plotly_chart(update_plot(data_source, leverage, ter, libor), use_container_width=True)
+    st.plotly_chart(
+        update_plot(data_source, leverage, ter, libor), use_container_width=True
+    )
