@@ -173,7 +173,7 @@ if __name__ == "__main__":
         }
         </style>
 
-        <div class="header">
+        <div class="header" color="#ffffff">
             <h1>Volatility Decay & Kelly Criterion</h1>
             <h3>Volatility decay, the phenomenon of underperforming the market 
             despite having a larger position, is a central concept in the realm 
@@ -209,7 +209,7 @@ if __name__ == "__main__":
 
     # Header for the plot
     st.markdown("", unsafe_allow_html=True)
-    st.write("## Visualize the Gain over Unleveraged ETF")
+    st.write("## Visualize the Gain over the Unleveraged ETF")
     # Dropdown for the plot style
     data_source = st.selectbox("Plot Style", ["Heatmap", "Contour"], index=0)
     # Slider for leverage
