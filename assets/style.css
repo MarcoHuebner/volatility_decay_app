@@ -1,0 +1,9 @@
+body {
+    background-color: #f0f0f0;
+    font-family: Arial, sans-serif;
+}
+
+#data-source, #leverage-slider, #TER-slider, #LIBOR-slider {
+    width: 80%;
+    margin: auto;
+}
