@@ -88,18 +88,22 @@ def leveraged_return_mesh(
                 - cagr / 100
             )
 
-    return mesh * 100
+    return np.round(mesh * 100, 2)
 
 
 # define display functions
 ann_return = 0.037 * 252
 ann_risk_free = 0.005 * 252
 ann_vol = 1.2 * np.sqrt(252)
+# define heatmap marginals (-50% - 50% underlying CAGR, 0-50% annualized volatility)
+cagr_f_underlying = np.linspace(-20, 60, 161, endpoint=True)
+volatility_f_undr = np.linspace(0.5, 50, 100, endpoint=True)
 
 
 def kelly_crit(yearly_er, yearly_risk_free, yearly_volatility):
     # calculate the Kelly Criterion
     # NOTE: the factor of 100 corrects for the percentage values
+    assert np.all(yearly_volatility > 0)
     return 100 * (yearly_er - yearly_risk_free) / yearly_volatility**2
 
 
@@ -113,11 +117,11 @@ def kelly_crit_mesh(yearly_er, yearly_risk_free, yearly_volatility):
     # calculate the Kelly Criterion meshed for different underlying CAGR and volatility
     mesh = np.zeros((len(yearly_volatility), len(yearly_er)))
     for i, vol in enumerate(yearly_volatility):
-        for j, cagr in enumerate(yearly_volatility):
+        for j, cagr in enumerate(yearly_er):
             # reflect on volatility axis due to the way, plotly sets-up heatmaps
             # also, rescale percentage values, as otherwise not readable in the sliders
             mesh[i, j] = kelly_crit(cagr, yearly_risk_free, vol)
-    return mesh
+    return np.round(mesh, 2)
 
 
 # define parameters (except for leverage all in percent)
@@ -125,8 +129,8 @@ lev_r = 2.0
 exp_r = 0.6
 libor = 0.5
 # define heatmap marginals (-50% - 50% underlying CAGR, 0-50% annualized volatility)
-cagr_underlying = np.linspace(-50, 50, 200)
-volatility_undr = np.linspace(0.0, 50, 100)
+cagr_underlying = np.linspace(-50, 50, 201, endpoint=True)
+volatility_undr = np.linspace(0.0, 50, 101, endpoint=True)
 
 # define the data
 zmin, zmax = -15, 20
@@ -179,28 +183,31 @@ def update_plot(data_source, leverage, TER, LIBOR):
     return fig
 
 
+# define the Kelly criterion data
+zmin_f, zmax_f = 0, 10
 data_f = [
     go.Heatmap(
-        x=cagr_underlying,
-        y=volatility_undr,
-        z=kelly_crit_mesh(cagr_underlying, ann_risk_free, volatility_undr),
-        zmax=zmax,
-        zmid=0,
-        zmin=zmin,
-        colorscale="RdBu",
-        colorbar=dict(title="Gain over Unleveraged ETF [%]", titleside="right"),
+        x=cagr_f_underlying,
+        y=volatility_f_undr,
+        z=kelly_crit_mesh(cagr_f_underlying, ann_risk_free, volatility_f_undr),
+        zmin=zmin_f,
+        zmid=1,
+        zmax=zmax_f,
+        colorscale="RdylGn_r",
+        colorbar=dict(title="Ideal Leverage (f)", titleside="right"),
     )
 ]
 data_f_contour = [
     go.Contour(
-        x=cagr_underlying,
-        y=volatility_undr,
-        z=kelly_crit_mesh(cagr_underlying, ann_risk_free, volatility_undr),
-        zmax=zmax,
-        zmid=0,
-        zmin=zmin,
-        colorscale="RdBu",
-        colorbar=dict(title="Gain over Unleveraged ETF [%]", titleside="right"),
+        x=cagr_f_underlying,
+        y=volatility_f_undr,
+        z=kelly_crit_mesh(cagr_f_underlying, ann_risk_free, volatility_f_undr),
+        zmin=zmin_f,
+        zmid=1,
+        zmax=zmax_f,
+        colorscale="RdylGn_r",
+        colorbar=dict(title="Ideal Leverage (f)", titleside="right"),
+
     )
 ]
 
@@ -212,14 +219,19 @@ def update_kelly_plot(data_source, risk_free_rate):
     else:
         fig = go.FigureWidget(data=data_f_contour)
     # write data to figure
-    fig.data[0].z = kelly_crit_mesh(cagr_underlying, risk_free_rate, volatility_undr)
+    fig.data[0].z = kelly_crit_mesh(
+        cagr_f_underlying, risk_free_rate, volatility_f_undr
+    )
     # update layout
     fig.update_layout(
         title="Kelly Allocation Factor f",
         title_font=dict(size=24),
-        xaxis_title="CAGR Underlying [%]",
+        xaxis_title="Yearly Return [%]",
         yaxis_title="Volatility [%]",
     )
+    # set initial zoom
+    fig.update_xaxes(range=[-5, 15])
+    fig.update_yaxes(range=[0.5, 25])
 
     return fig
 
@@ -281,6 +293,14 @@ if __name__ == "__main__":
     # Header for the plot
     st.markdown("", unsafe_allow_html=True)
     st.write("## Visualize the Gain over the Unleveraged ETF")
+    st.markdown(
+        """
+        The profit (difference) compared to the unleveraged ETF is shown below. 
+        It becomes clear that the profit does not increase linearly with the 
+        leverage and that the margin of error becomes smaller and smaller, 
+        particularly with higher leverage.
+        """
+    )
     # Dropdown for the plot style
     data_source = st.selectbox("Plot Style", ["Heatmap", "Contour"], index=0)
     # Slider for leverage
@@ -299,8 +319,23 @@ if __name__ == "__main__":
     # Header for the Kelly Criterion plot
     st.markdown("", unsafe_allow_html=True)
     st.write("## Visualize the Ideal Leverage Factor")
+    st.markdown(
+        """
+        In contrast to the previous illustration, the ideal leverage factor 
+        determined by the Kelly criterion, shows an even stronger dependence 
+        on volatility and thus an even smaller margin of error. This is due 
+        to the fact that the Kelly criterion maximizes the expected geometric 
+        growth rate, which is a 'hedge' against the 
+        ['Just One More Paradox'](https://www.youtube.com/watch?v=_FuuYSM7yOo&), 
+        which describes the phenomenon of a median loss even though the 
+        expected value of every bet is positive.
+        """,
+        unsafe_allow_html=True,
+    )
     # Dropdown for the plot style
-    data_source_kelly = st.selectbox("Plot Style", ["Heatmap", "Contour"], index=0)
+    data_source_kelly = st.selectbox(
+        "Plot Style", ["Heatmap", "Contour"], index=1, key="kelly"
+    )
     # Slider for the risk free rate
     risk_free_rate = st.slider(
         "Risk Free Yearly Return [%]",
