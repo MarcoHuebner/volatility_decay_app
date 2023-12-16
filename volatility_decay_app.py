@@ -149,7 +149,7 @@ def update_plot(data_source, leverage, TER, LIBOR):
     )
     # update layout
     fig.update_layout(
-        title="Visualized Gain over Unleveraged ETF",
+        title="Gain over the\nUnleveraged ETF",
         title_font=dict(size=24),
         xaxis_title="CAGR Underlying [%]",
         yaxis_title="Volatility [%]",
@@ -171,9 +171,12 @@ if __name__ == "__main__":
             max-width: 100%;
             text-align: center;
         }
+        .header h1, .header h3 {
+            color: white !important;
+        }
         </style>
 
-        <div class="header" color="#ffffff">
+        <div class="header">
             <h1>Volatility Decay & Kelly Criterion</h1>
             <h3>Volatility decay, the phenomenon of underperforming the market 
             despite having a larger position, is a central concept in the realm 
