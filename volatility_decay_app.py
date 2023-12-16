@@ -92,11 +92,32 @@ def leveraged_return_mesh(
 
 
 # define display functions
-def update_result(a, b, c):
+ann_return = 0.037 * 252
+ann_risk_free = 0.005 * 252
+ann_vol = 1.2 * np.sqrt(252)
+
+
+def kelly_crit(yearly_er, yearly_risk_free, yearly_volatility):
     # calculate the Kelly Criterion
     # NOTE: the factor of 100 corrects for the percentage values
-    # NOTE: the factor of 252 corrects for the daily values
-    return f"#### Kelly Fraction f: {100 * (a - b) / c**2:.2f}"
+    return 100 * (yearly_er - yearly_risk_free) / yearly_volatility**2
+
+
+def update_result(yearly_er, yearly_risk_free, yearly_volatility):
+    # display the Kelly Criterion
+    kelly_f = kelly_crit(yearly_er, yearly_risk_free, yearly_volatility)
+    return f"#### Kelly Fraction f: {kelly_f:.2f}"
+
+
+def kelly_crit_mesh(yearly_er, yearly_risk_free, yearly_volatility):
+    # calculate the Kelly Criterion meshed for different underlying CAGR and volatility
+    mesh = np.zeros((len(yearly_volatility), len(yearly_er)))
+    for i, vol in enumerate(yearly_volatility):
+        for j, cagr in enumerate(yearly_volatility):
+            # reflect on volatility axis due to the way, plotly sets-up heatmaps
+            # also, rescale percentage values, as otherwise not readable in the sliders
+            mesh[i, j] = kelly_crit(cagr, yearly_risk_free, vol)
+    return mesh
 
 
 # define parameters (except for leverage all in percent)
@@ -158,6 +179,51 @@ def update_plot(data_source, leverage, TER, LIBOR):
     return fig
 
 
+data_f = [
+    go.Heatmap(
+        x=cagr_underlying,
+        y=volatility_undr,
+        z=kelly_crit_mesh(cagr_underlying, ann_risk_free, volatility_undr),
+        zmax=zmax,
+        zmid=0,
+        zmin=zmin,
+        colorscale="RdBu",
+        colorbar=dict(title="Gain over Unleveraged ETF [%]", titleside="right"),
+    )
+]
+data_f_contour = [
+    go.Contour(
+        x=cagr_underlying,
+        y=volatility_undr,
+        z=kelly_crit_mesh(cagr_underlying, ann_risk_free, volatility_undr),
+        zmax=zmax,
+        zmid=0,
+        zmin=zmin,
+        colorscale="RdBu",
+        colorbar=dict(title="Gain over Unleveraged ETF [%]", titleside="right"),
+    )
+]
+
+
+def update_kelly_plot(data_source, risk_free_rate):
+    # update data
+    if data_source == "Heatmap":
+        fig = go.FigureWidget(data=data_f)
+    else:
+        fig = go.FigureWidget(data=data_f_contour)
+    # write data to figure
+    fig.data[0].z = kelly_crit_mesh(cagr_underlying, risk_free_rate, volatility_undr)
+    # update layout
+    fig.update_layout(
+        title="Kelly Allocation Factor f",
+        title_font=dict(size=24),
+        xaxis_title="CAGR Underlying [%]",
+        yaxis_title="Volatility [%]",
+    )
+
+    return fig
+
+
 if __name__ == "__main__":
     # define the layout
     st.set_page_config(layout="wide")
@@ -199,12 +265,14 @@ if __name__ == "__main__":
         "## Annualized [Kelly Criterion](https://rhsfinancial.com/2017/06/20/line-aggressive-crazy-leverage/) Calculator"
     )
     # Text input for yearly expected return
-    yearly_er = st.number_input("Expected Yearly Return [%]", value=0.037 * 252)
+    yearly_er = st.number_input("Expected Yearly Return [%]", value=ann_return)
     # Text input for yearly risk free rate
-    yearly_risk_free = st.number_input("Risk Free Yearly Return [%]", value=0.005 * 252)
+    yearly_risk_free = st.number_input(
+        "Risk Free Yearly Return [%]", value=ann_risk_free
+    )
     # Text input for yearly return volatility
     yearly_volatility = st.number_input(
-        "Annualized Volatility of the Underlying [%]", value=1.2 * np.sqrt(252)
+        "Annualized Volatility of the Underlying [%]", ann_vol
     )
     # Display the result
     result = update_result(yearly_er, yearly_risk_free, yearly_volatility)
@@ -226,4 +294,22 @@ if __name__ == "__main__":
     # Placeholder for the graph
     st.plotly_chart(
         update_plot(data_source, leverage, ter, libor), use_container_width=True
+    )
+
+    # Header for the Kelly Criterion plot
+    st.markdown("", unsafe_allow_html=True)
+    st.write("## Visualize the Ideal Leverage Factor")
+    # Dropdown for the plot style
+    data_source_kelly = st.selectbox("Plot Style", ["Heatmap", "Contour"], index=0)
+    # Slider for the risk free rate
+    risk_free_rate = st.slider(
+        "Risk Free Yearly Return [%]",
+        min_value=0.0,
+        max_value=8.0,
+        value=3.0,
+        step=0.25,
+    )
+    # Placeholder for the graph
+    st.plotly_chart(
+        update_kelly_plot(data_source_kelly, risk_free_rate), use_container_width=True
     )
