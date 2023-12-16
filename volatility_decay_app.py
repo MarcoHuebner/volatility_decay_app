@@ -149,7 +149,8 @@ def update_plot(data_source, leverage, TER, LIBOR):
     )
     # update layout
     fig.update_layout(
-        title="Gain over the\nUnleveraged ETF",
+        title="Gain over the<br>Unleveraged ETF",
+        title_x=0.3,
         title_font=dict(size=24),
         xaxis_title="CAGR Underlying [%]",
         yaxis_title="Volatility [%]",
