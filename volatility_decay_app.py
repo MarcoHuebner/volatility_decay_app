@@ -176,9 +176,11 @@ def update_plot(data_source, leverage, TER, LIBOR):
     fig.update_layout(
         title="Gain over the Unleveraged ETF",
         title_font=dict(size=24),
+        hovermode="x unified",
         xaxis_title="CAGR Underlying [%]",
-        yaxis_title="Volatility [%]",
+        yaxis_title="Ann. Volatility [%]",
     )
+    fig.update_traces(hovertemplate="Outperformance [%]: %{z:.1f}<br>CAGR Underlying [%]: %{x}<br>Ann. Vol. Underlying [%]: %{y}<extra></extra>")
 
     return fig
 
@@ -226,9 +228,11 @@ def update_kelly_plot(data_source, risk_free_rate):
     fig.update_layout(
         title="Kelly Allocation Factor f",
         title_font=dict(size=24),
-        xaxis_title="Yearly Return [%]",
-        yaxis_title="Volatility [%]",
+        hovermode="x unified",
+        xaxis_title="CAGR Underlying [%]",
+        yaxis_title="Ann. Volatility [%]",
     )
+    fig.update_traces(hovertemplate="Allocation Factor f: %{z}<br>CAGR Underlying [%]: %{x}<br>Ann. Vol. Underlying [%]: %{y}<extra></extra>")
     # set initial zoom
     fig.update_xaxes(range=[-5, 15])
     fig.update_yaxes(range=[0.5, 25])
