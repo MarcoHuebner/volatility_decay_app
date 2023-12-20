@@ -281,17 +281,17 @@ if __name__ == "__main__":
         "## Annualized [Kelly Criterion](https://rhsfinancial.com/2017/06/20/line-aggressive-crazy-leverage/) Calculator"
     )
     # Text input for yearly expected return
-    yearly_er = st.number_input("Expected Yearly Return [%]", value=ann_return)
+    input_er = st.number_input("Expected Yearly Return [%]", value=ann_return)
     # Text input for yearly risk free rate
-    yearly_risk_free = st.number_input(
+    input_risk_free = st.number_input(
         "Risk Free Yearly Return [%]", value=ann_risk_free
     )
     # Text input for yearly return volatility
-    yearly_volatility = st.number_input(
-        "Annualized Volatility of the Underlying [%]", ann_vol
+    input_volatility = st.number_input(
+        "Annualized Volatility of the Underlying [%]", value=ann_vol
     )
     # Display the result
-    result = update_result(yearly_er, yearly_risk_free, yearly_volatility)
+    result = update_result(input_er, input_risk_free, input_volatility)
     st.write(result)
 
     # Header for the plot
