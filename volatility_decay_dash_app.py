@@ -3,7 +3,6 @@ This module contains the code for the volatility decay dashboard.
 
 Required libraries:
 pip install dash dash-core-components dash-html-components dash-renderer
-pip install plotly
 
 assets folder: Contains style.css file for styling the dashboard
 
