@@ -110,7 +110,7 @@ def kelly_crit(yearly_er, yearly_risk_free, yearly_volatility):
 def update_result(yearly_er, yearly_risk_free, yearly_volatility):
     # display the Kelly Criterion
     kelly_f = kelly_crit(yearly_er, yearly_risk_free, yearly_volatility)
-    return f"#### Kelly Fraction f: {kelly_f:.2f}"
+    return f"#### Ideal Market Exposure: {kelly_f*100:.0f}% ({kelly_f:.2f} leverage factor)"
 
 
 def kelly_crit_mesh(yearly_er, yearly_risk_free, yearly_volatility):
@@ -143,7 +143,9 @@ data = [
         zmid=0,
         zmin=zmin,
         colorscale="RdBu",
-        colorbar=dict(title="Gain over Unleveraged ETF [%]", titleside="right"),
+        colorbar=dict(
+            title="Outperformance LETF over Unleveraged ETF [%]", titleside="right"
+        ),
     )
 ]
 data_contour = [
@@ -155,7 +157,9 @@ data_contour = [
         zmid=0,
         zmin=zmin,
         colorscale="RdBu",
-        colorbar=dict(title="Gain over Unleveraged ETF [%]", titleside="right"),
+        colorbar=dict(
+            title="Outperformance LETF over Unleveraged ETF [%]", titleside="right"
+        ),
     )
 ]
 
@@ -174,13 +178,15 @@ def update_plot(data_source, leverage, TER, LIBOR):
     )
     # update layout
     fig.update_layout(
-        title="Gain over the Unleveraged ETF",
+        title="Gain of the LETF over the Unleveraged ETF",
         title_font=dict(size=24),
         hovermode="x unified",
-        xaxis_title="CAGR Underlying [%]",
-        yaxis_title="Ann. Volatility [%]",
+        xaxis_title="Underlying: Expected Yearly Return [%]",
+        yaxis_title="Underlying: Annualized Volatility [%]",
     )
-    fig.update_traces(hovertemplate="Outperformance [%]: %{z:.1f}<br>CAGR Underlying [%]: %{x}<br>Ann. Vol. Underlying [%]: %{y}<extra></extra>")
+    fig.update_traces(
+        hovertemplate="Outperformance [%]: %{z:.1f}<br>Underlying: CAGR [%]: %{x}<br>Underlying: Ann. Vol. [%]: %{y}<extra></extra>"
+    )
 
     return fig
 
@@ -196,7 +202,7 @@ data_f = [
         zmid=1,
         zmax=zmax_f,
         colorscale="RdylGn_r",
-        colorbar=dict(title="Ideal Leverage (f)", titleside="right"),
+        colorbar=dict(title="Ideal Leverage Factor", titleside="right"),
     )
 ]
 data_f_contour = [
@@ -208,8 +214,7 @@ data_f_contour = [
         zmid=1,
         zmax=zmax_f,
         colorscale="RdylGn_r",
-        colorbar=dict(title="Ideal Leverage (f)", titleside="right"),
-
+        colorbar=dict(title="Ideal Leverage Factor", titleside="right"),
     )
 ]
 
@@ -226,13 +231,15 @@ def update_kelly_plot(data_source, risk_free_rate):
     )
     # update layout
     fig.update_layout(
-        title="Kelly Allocation Factor f",
+        title="Ideal Leverage Factor According to Kelly Criterion",
         title_font=dict(size=24),
         hovermode="x unified",
-        xaxis_title="CAGR Underlying [%]",
-        yaxis_title="Ann. Volatility [%]",
+        xaxis_title="Underlying: Expected Yearly Return [%]",
+        yaxis_title="Underlying: Annualized Volatility [%]",
     )
-    fig.update_traces(hovertemplate="Allocation Factor f: %{z}<br>CAGR Underlying [%]: %{x}<br>Ann. Vol. Underlying [%]: %{y}<extra></extra>")
+    fig.update_traces(
+        hovertemplate="Leverage Factor: %{z}<br>Underlying: CAGR [%]: %{x}<br>Underlying: Ann. Vol. [%]: %{y}<extra></extra>"
+    )
     # set initial zoom
     fig.update_xaxes(range=[-5, 15])
     fig.update_yaxes(range=[0.5, 25])
@@ -278,7 +285,7 @@ if __name__ == "__main__":
     # Header for the Kelly Criterion
     st.markdown("", unsafe_allow_html=True)
     st.write(
-        "## Annualized [Kelly Criterion](https://rhsfinancial.com/2017/06/20/line-aggressive-crazy-leverage/) Calculator"
+        "## [Kelly Criterion](https://rhsfinancial.com/2017/06/20/line-aggressive-crazy-leverage/) Calculator (Annualized)"
     )
     # Text input for yearly expected return
     input_er = st.number_input("Expected Yearly Return [%]", value=ann_return)
@@ -296,25 +303,34 @@ if __name__ == "__main__":
 
     # Header for the plot
     st.markdown("", unsafe_allow_html=True)
-    st.write("## Visualize the Gain over the Unleveraged ETF")
+    st.write("## Gain of the LETF over the Unleveraged ETF")
     st.markdown(
         """
-        The profit (difference) compared to the unleveraged ETF is shown below. 
-        It becomes clear that the profit does not increase linearly with the 
-        leverage and that the margin of error becomes smaller and smaller, 
-        particularly with higher leverage.
+        The difference in profit of the hypothetical leveraged ETF is 
+        compared to the unleveraged ETF below. It becomes clear that 
+        the profit does not increase linearly with leverage and the 
+        margin of error becomes smaller and smaller, especially with 
+        higher leverage.
         """
     )
     # Dropdown for the plot style
-    data_source = st.selectbox("Plot Style", ["Heatmap", "Contour"], index=0)
+    data_source = st.selectbox("Plot Style", ["Heatmap", "Contour"], index=1)
     # Slider for leverage
     leverage = st.slider(
-        "Leverage [%]", min_value=0.0, max_value=1000.0, value=lev_r * 100, step=10.0
+        "Exposure to the Market (Leverage) [%]",
+        min_value=0.0,
+        max_value=1000.0,
+        value=lev_r * 100,
+        step=10.0,
     )
     # Slider for TER
-    ter = st.slider("TER [%]", min_value=0.0, max_value=2.0, value=exp_r, step=0.05)
+    ter = st.slider(
+        "TER of the ETF [%]", min_value=0.0, max_value=2.0, value=exp_r, step=0.05
+    )
     # Slider for LIBOR
-    libor = st.slider("LIBOR [%]", min_value=0.0, max_value=4.0, value=libor, step=0.1)
+    libor = st.slider(
+        "LIBOR rate [%]", min_value=0.0, max_value=4.0, value=libor, step=0.1
+    )
     # Placeholder for the graph
     st.plotly_chart(
         update_plot(data_source, leverage, ter, libor), use_container_width=True
@@ -322,17 +338,17 @@ if __name__ == "__main__":
 
     # Header for the Kelly Criterion plot
     st.markdown("", unsafe_allow_html=True)
-    st.write("## Visualize the Ideal Leverage Factor")
+    st.write("## Ideal Market Exposure (Leverage) According to the Kelly Criterion")
     st.markdown(
         """
-        In contrast to the previous illustration, the ideal leverage factor 
-        determined by the Kelly criterion, shows an even stronger dependence 
+        In contrast to the previous figure, the ideal leverage factor, which 
+        is determined by the Kelly criterion, shows an even stronger dependence 
         on volatility and thus an even smaller margin of error. This is due 
         to the fact that the Kelly criterion maximizes the expected geometric 
-        growth rate, which is a 'hedge' against the 
+        growth rate, thus avoiding the 
         ['Just One More Paradox'](https://www.youtube.com/watch?v=_FuuYSM7yOo&), 
-        which describes the phenomenon of a median loss even though the 
-        expected value of every bet is positive.
+        which describes the phenomenon of a median loss even though the expected 
+        value of every bet and thus the overall expected value (mean) is positive.
         """,
         unsafe_allow_html=True,
     )
