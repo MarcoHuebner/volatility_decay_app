@@ -20,76 +20,9 @@ ipywidgets>=7.0.0
 
 import numpy as np
 import plotly.graph_objects as go
-
 import streamlit as st
 
-
-# define the mathematical functions
-def leveraged_return(
-    lev_factor: float,
-    cagr_underlying: float,
-    leverage_expense_ratio: float,
-    libor: float,
-    yearly_volatility: float,
-) -> float:
-    """
-    Calculate the leveraged return according to
-    https://www.reddit.com/r/HFEA/comments/tue7n6/the_volatility_decay_equation_with_verification/
-
-    :param lev_factor: float, leverage factor applied
-    :param cagr_underlying: float, compound annual growth rate
-    :param leverage_expense_ratio: float, expense ratio of the leveraged position (fund)
-    :param libor: float, average LIBOR during investment period + 0.4%
-    :param yearly_volatility: float, annualized volatility
-    :return: float, annual return of leveraged position (fund)
-    """
-    # short names/ notation
-    x = lev_factor
-    r = cagr_underlying
-    E = leverage_expense_ratio
-    I = libor
-    s = yearly_volatility / np.sqrt(252)  # get daily volatility
-
-    # define helpful quantities to avoid repitition & better overview
-    exp = np.exp(np.log(1 + r) / 252)
-    e_i = (E + 1.1 * (x - 1) * I) / 252
-    first = x * s + x * s**2 / (2 * exp) + x * exp - e_i - x + 1
-    second = x * exp**2 / (s + 0.5 * s**2 * exp ** (-1) + exp) - e_i - x + 1
-
-    return (first * second) ** 126 - 1
-
-
-def leveraged_return_mesh(
-    lev: float, cagr_undr: float, exp: float, lib: float, vol_undr: float
-) -> np.ndarray:
-    """
-    Create a mesh of leveraged returns for visualizing the leveraged return against
-    the underlying return and against the volatility. Return shows quadratic behaviour
-    similar to the some discussion in the following sources:
-    - https://www.afrugaldoctor.com/home/leveraged-etfs-and-volatility-decay-part-2
-    - https://papers.ssrn.com/sol3/papers.cfm?abstract_id=1664823
-
-    :param lev: float, leverage factor applied
-    :param cagr_undr: float, compound annual growth rate in percent
-    :param exp: float, expense ratio of the leveraged position (fund) in percent
-    :param lib: float, average LIBOR during investment period in percent
-    :param vol_undr: float, annualized volatility of the underlying in percent
-    :return: np.ndarray, volatility & underlying CAGR leveraged return mesh
-    """
-    # create mesh leveraged CAGR as array
-    mesh = np.zeros((len(vol_undr), len(cagr_undr)))
-
-    for i, vol in enumerate(vol_undr):
-        for j, cagr in enumerate(cagr_undr):
-            # reflect on volatility axis due to the way, plotly sets-up heatmaps
-            # also, rescale percentage values, as otherwise not readable in the sliders
-            mesh[i, j] = (
-                leveraged_return(lev, cagr / 100, exp / 100, lib / 100, vol / 100)
-                - cagr / 100
-            )
-
-    return np.round(mesh * 100, 2)
-
+from utils import leveraged_return_mesh
 
 # define display functions
 ann_return = 0.037 * 252
@@ -100,20 +33,26 @@ cagr_f_underlying = np.linspace(-20, 60, 161, endpoint=True)
 volatility_f_undr = np.linspace(0.5, 50, 100, endpoint=True)
 
 
-def kelly_crit(yearly_er, yearly_risk_free, yearly_volatility):
+def kelly_crit(
+    yearly_er: float, yearly_risk_free: float, yearly_volatility: float
+) -> float:
     # calculate the Kelly Criterion
     # NOTE: the factor of 100 corrects for the percentage values
     assert np.all(yearly_volatility > 0)
     return 100 * (yearly_er - yearly_risk_free) / yearly_volatility**2
 
 
-def update_result(yearly_er, yearly_risk_free, yearly_volatility):
+def update_result(
+    yearly_er: float, yearly_risk_free: float, yearly_volatility: float
+) -> str:
     # display the Kelly Criterion
     kelly_f = kelly_crit(yearly_er, yearly_risk_free, yearly_volatility)
     return f"#### Ideal Market Exposure: {kelly_f*100:.0f}% ({kelly_f:.2f} leverage factor)"
 
 
-def kelly_crit_mesh(yearly_er, yearly_risk_free, yearly_volatility):
+def kelly_crit_mesh(
+    yearly_er: float, yearly_risk_free: float, yearly_volatility: float
+) -> np.ndarray:
     # calculate the Kelly Criterion meshed for different underlying CAGR and volatility
     mesh = np.zeros((len(yearly_volatility), len(yearly_er)))
     for i, vol in enumerate(yearly_volatility):
@@ -164,7 +103,9 @@ data_contour = [
 ]
 
 
-def update_plot(data_source, leverage, TER, LIBOR):
+def update_plot(
+    data_source: str, leverage: float, TER: float, LIBOR: float
+) -> go.Figure:
     # rescale the leverage factor
     leverage /= 100
     # update data
@@ -219,7 +160,7 @@ data_f_contour = [
 ]
 
 
-def update_kelly_plot(data_source, risk_free_rate):
+def update_kelly_plot(data_source: str, risk_free_rate: float) -> go.Figure:
     # update data
     if data_source == "Heatmap":
         fig = go.FigureWidget(data=data_f)
