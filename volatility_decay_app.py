@@ -22,7 +22,8 @@ import numpy as np
 import plotly.graph_objects as go
 import streamlit as st
 
-from utils import leveraged_return_mesh
+from utils import fetch_ticker_data, leveraged_return_mesh
+
 
 # define display functions
 ann_return = 0.037 * 252
@@ -188,6 +189,154 @@ def update_kelly_plot(data_source: str, risk_free_rate: float) -> go.Figure:
     return fig
 
 
+# define the ticker price data plot
+def update_ticker_plot(ticker: str, risk_free_rate_ticker: float) -> go.Figure:
+    # create the plotly figure
+    fig = go.Figure()  # make_subplots(specs=[[{"secondary_y": True}]])
+    # define colours, loosely related to the streamlit default colours
+    # https://discuss.streamlit.io/t/access-streamlit-default-color-palette/35737
+    st_blue = "#83c9ff"
+    st_dark_blue = "#0068c9"
+    st_darker_blue = "#0054a3"
+    st_red = "#ff2b2b"
+    st_light_red = "#ff8c8c"
+    st_green = "#21c354"
+
+    # get data
+    result_dict = fetch_ticker_data(ticker)
+    # add price line
+    fig.add_trace(
+        go.Scatter(
+            x=result_dict["price"].index[-252:],
+            y=result_dict["price"].iloc[-252:],
+            mode="lines",
+            name="Closing Price",
+            line=dict(color=st_blue),
+        )
+    )
+    # add 50-day moving average
+    fig.add_trace(
+        go.Scatter(
+            x=result_dict["ma50"].index,
+            y=result_dict["ma50"],
+            name="50 Day MA",
+            line=dict(color=st_dark_blue, dash="dash"),
+        )
+    )
+    # add 200-day moving average
+    fig.add_trace(
+        go.Scatter(
+            x=result_dict["ma200"].index,
+            y=result_dict["ma200"],
+            name="200 Day MA",
+            line=dict(color=st_darker_blue, dash="dot"),
+        )
+    )
+    # add volatility
+    fig.add_trace(
+        go.Scatter(
+            x=result_dict["ann_volatility"].index,
+            y=result_dict["ann_volatility"],
+            mode="lines",
+            name="Annualized Volatility",
+            yaxis="y2",
+            line=dict(color=st_red),
+        )
+    )
+    # add daily volatility
+    fig.add_trace(
+        go.Scatter(
+            x=result_dict["volatility"].index,
+            y=result_dict["volatility"],
+            mode="lines",
+            name="Daily Volatility Estimate",
+            yaxis="y2",
+            visible="legendonly",
+            line=dict(color=st_red, dash="dot"),
+        )
+    )
+    # add garch volatility
+    fig.add_trace(
+        go.Scatter(
+            x=result_dict["garch_volatility"].index,
+            y=result_dict["garch_volatility"],
+            mode="lines",
+            name="GARCH Forecast Volatility",
+            yaxis="y2",
+            visible="legendonly",
+            line=dict(color=st_light_red, dash="dash"),
+        )
+    )
+    # add daily percentage change
+    pct_change = result_dict["price"].pct_change() * 100
+    fig.add_trace(
+        go.Scatter(
+            x=result_dict["price"].index[-252:],
+            y=pct_change.iloc[-252:],
+            mode="lines",
+            name="Daily Returns",
+            yaxis="y3",
+            visible="legendonly",
+            line=dict(color=st_green),
+        )
+    )
+
+    # calculate the Kelly Criterion
+    annual_return = result_dict["price"].iloc[-1] / result_dict["price"].iloc[-252] - 1
+    kelly = kelly_crit(
+        annual_return * 100,
+        risk_free_rate_ticker,
+        result_dict["ann_volatility"].iloc[-1],
+    )
+    # calculate the leverage factor for 20% volatility
+    lev_20 = 20 / result_dict["ann_volatility"].iloc[-1]
+    # calculate the Percentage at Risk (PaR)
+    par_5 = np.percentile(pct_change.dropna(), 5)
+    par_1 = np.percentile(pct_change.dropna(), 1)
+
+    # update layout
+    fig.update_layout(
+        title=f"<span style='font-size: 24px;'>Current Price and Volatility of {result_dict['name']}</span><br>"
+        + "<span style='font-size: 4px;'></span><br>"
+        + f"<span style='font-size: 16px;'>Suggested Kelly Leverage Factor: {kelly:.2f}\
+   -   Leverage @20% Volatility: {lev_20:.2f}\
+   -   Current 1%/5% PaR (last 5y): {par_1:.2f}%/{par_5:.2f}% of the Underlying</span>",
+        hovermode="x unified",
+        yaxis=dict(
+            title="Closing Prices", title_font=dict(color=st_blue), hoverformat=".2f"
+        ),
+        yaxis2=dict(
+            title="Annualized Volatility [%]",
+            side="right",
+            overlaying="y",
+            title_font=dict(color=st_red),
+            hoverformat=".2f",
+        ),
+        yaxis3=dict(
+            title="Daily Returns [%]",
+            side="right",
+            overlaying="y",
+            position=0.96,
+            title_font=dict(color=st_green),
+            hoverformat=".2f",
+        ),
+    )
+    # set x-ticks
+    num_ticks = 10
+    tickids = np.linspace(
+        0, min(252, len(result_dict["price"])) - 1, num_ticks, endpoint=True, dtype=int
+    )
+    tickvals = [result_dict["price"].iloc[-252:].index[id] for id in tickids]
+    ticktext = [val.strftime("%Y-%m-%d") for val in tickvals]
+    fig.update_xaxes(
+        tickvals=tickvals,
+        ticktext=ticktext,
+        domain=[0.0, 0.89],
+    )
+
+    return fig
+
+
 if __name__ == "__main__":
     # define the layout
     st.set_page_config(layout="wide")
@@ -308,4 +457,49 @@ if __name__ == "__main__":
     # Placeholder for the graph
     st.plotly_chart(
         update_kelly_plot(data_source_kelly, risk_free_rate), use_container_width=True
+    )
+    # Header for the ticker price data plot
+    st.markdown("", unsafe_allow_html=True)
+    st.write("## What Does All This Imply for My Investments?")
+    st.markdown(
+        """
+        Depending on whether you want to pursue a maximally aggressive Kelly strategy 
+        or whether you are aiming for an annualized volatility of 20%, for example, 
+        you can find suggestions below in view of current stock market prices as well 
+        as forecasts for the percentage-at-risk (PaR) at empirical 1% and 5% levels 
+        based on the data of the last 5 years (if available) in order to put the Kelly 
+        suggestions into perspective.\n
+        
+        Here are some common ticker symbols:<br>
+        - ^GSPC: S&P 500 Index<br>
+        - ^NDX: Nasdaq 100 Index<br>
+        - AAPL: Apple Inc.<br>
+        - MSFT: Microsoft Corporation<br>
+        - NVDA: NVIDIA Corporation<br>
+        - ^GDAXI: DAX40 Index<br>
+        - ^STOXX50E: EURO STOXX 50 Index<br>
+        - ^STOXX: STOXX Europe 600 Index<br>
+        - ^N225: Nikkei 225 Index<br>
+        - SPY: SPDR S&P 500 ETF<br>
+        - SJIM: Inverse Cramer ETF\n
+        
+        For a list of all available ticker symbols, please visit 
+        https://finance.yahoo.com/lookup or https://finance.yahoo.com/most-active/
+        """,
+        unsafe_allow_html=True,
+    )
+    # Ticker string input
+    ticker_symbol = st.text_input("Ticker Symbol", value="^GSPC")
+    # Slider for the risk free rate
+    risk_free_rate_ticker = st.slider(
+        "Risk Free Yearly Return [%]",
+        min_value=0.0,
+        max_value=8.0,
+        value=3.0,
+        step=0.25,
+        key="ticker",
+    )
+    st.plotly_chart(
+        update_ticker_plot(ticker_symbol, risk_free_rate_ticker),
+        use_container_width=True,
     )
