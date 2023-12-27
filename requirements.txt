@@ -1,4 +1,6 @@
 plotly
 numpy
 streamlit
+typing
+yfinance
 ipywidgets>=7.0.0
