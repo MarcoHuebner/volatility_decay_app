@@ -3,11 +3,13 @@ Utility functions for the app.
 
 """
 
+from typing import Union
+from tqdm import tqdm
+
 import numpy as np
 import pandas as pd
 import yfinance
-
-from typing import Union
+from arch import arch_model
 
 
 # define the mathematical functions
@@ -91,43 +93,96 @@ def fetch_ticker_data(ticker: str) -> dict[str, Union[str, pd.Series]]:
     lazy_dict = yfinance.Ticker(ticker)
 
     # Pick the relevant data
-    data = lazy_dict.history(period="1y", interval="1d", auto_adjust=True)["Close"]
+    data = lazy_dict.history(period="2y", interval="1d", auto_adjust=True)["Close"]
     data_high = lazy_dict.history(period="1y", interval="1d", auto_adjust=True)["High"]
     data_low = lazy_dict.history(period="1y", interval="1d", auto_adjust=True)["Low"]
     if data.empty:
         raise ValueError(f"Ticker {ticker} not found. Please check the ticker symbol.")
     else:
+        # Slice the data to the one and two years, to reduce computation time
+        starting_date_1y = data.index[-252]
         # Calculate the moving averages
         ma50 = data.rolling(window=50).mean().dropna()
         ma200 = data.rolling(window=200).mean().dropna()
         # Get the full name of the ticker symbol
         name = lazy_dict.info["longName"]
-        # Create a dictionary with the relevant data
+        # Create a dictionary with the last year of (trading days) data (except for price)
         result_dict = {
             "name": name,
-            "data": data,
-            "data_high": data_high,
-            "data_low": data_low,
-            "ma50": ma50,
-            "ma200": ma200,
+            "price": data,
+            "volatility": estimated_annualized_volatility(data_high, data_low),
+            "ann_volatility": empirical_annualized_volatility(data),
+            "garch_volatility": garch_estimated_volatility(data),
+            "ma50": ma50.loc[starting_date_1y:],
+            "ma200": ma200.loc[starting_date_1y:],
         }
         return result_dict
 
 
-def empirical_annualized_volatility(data_high: pd.Series, data_low: pd.Series) -> float:
+def estimated_annualized_volatility(data_high: pd.Series, data_low: pd.Series) -> float:
     """
     Calculate the annualized volatility via an estimate of daily volatility
-    based on V_p in "Modelling Volatility Using High, Low, Open and Closing
-    Prices: Evidence from Four S&P Indices".
-    Source: https://core.ac.uk/download/pdf/52391988.pdf
+    based on "The Extreme Value Method for Estimating the Variance of the Rate of Return".
+    Source: https://www.jstor.org/stable/2352357
 
-    :param data: pd.Series, stock data
-    :return: float, annualized volatility
+    :param data: pd.Series, price data
+    :return: float, annualized volatility in percent
     """
     # Calculate the daily volatility
-    daily_volatility = 0.361 * (np.log(data_high / data_low)) ** 2
-    # Convert to annualized volatility
-    return daily_volatility * np.sqrt(252)
+    daily_volatility = np.log(data_high / data_low)
+
+    # Convert to annualized volatility in percent
+    return daily_volatility * np.sqrt(252) * 100
+
+
+def empirical_annualized_volatility(data: pd.Series) -> float:
+    """
+    Calculate the annualized volatility for every day in the stock data.
+
+    :param data: pd.Series, price data
+    :return: float, annualized volatility in percent
+    """
+    # Calculate the volatility
+    volatility = data.pct_change().rolling(window=252).std().dropna()
+
+    # Convert to annualized volatility in percent
+    return volatility * np.sqrt(252) * 100
+
+
+def garch_estimated_volatility(data: pd.Series) -> float:
+    """
+    Use a GARCH model to forecast the annualized volatility every day.
+    See https://arch.readthedocs.io/en/latest/univariate/univariate_volatility_forecasting.html
+
+    :param data: pd.Series, price data
+    :return: float, forecasted annualized volatility
+    """
+    # Calculate the daily returns
+    daily_returns = data.pct_change().dropna() * 100
+    # Create a GARCH model
+    model_type = "EGARCH"
+    forecasts = {}
+    # Reduce the number of forecasts to speed up the computation
+    reduction_factor = 3
+    # Do recursive forecasting for the last year
+    for i in tqdm(range(252 // reduction_factor), desc=f"{model_type} forecasting"):
+        end_date = daily_returns.index[-252 + i * reduction_factor]
+        am = arch_model(
+            daily_returns.loc[:end_date],
+            mean="AR",
+            vol=model_type,
+            p=1,
+            o=0,
+            q=1,
+            dist="Normal",
+        )
+        res = am.fit(disp="off")
+        # Get the volatility forecast
+        temp = res.forecast(reindex=False).variance
+        # Store and annualize the forecast
+        forecasts[temp.index[0]] = temp.iloc[0].values[0] * np.sqrt(252)
+
+    return pd.Series(forecasts)
 
 
 def empirical_var(data: pd.Series, alpha: float) -> float:
