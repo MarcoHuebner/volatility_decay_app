@@ -1,6 +1,8 @@
-plotly
+arch
 numpy
+plotly
 streamlit
+tqdm
 typing
-yfinance
+yfinance==0.2.33
 ipywidgets>=7.0.0
