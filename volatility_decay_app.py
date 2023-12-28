@@ -281,12 +281,18 @@ def update_ticker_plot(ticker: str, risk_free_rate_ticker: float) -> go.Figure:
         )
     )
 
-    # calculate the Kelly Criterion
-    annual_return = result_dict["price"].iloc[-1] / result_dict["price"].iloc[-252] - 1
-    kelly = kelly_crit(
-        annual_return * 100,
-        risk_free_rate_ticker,
+    # calculate the Kelly Criterion with maximum of the three volatilities
+    average_vol_30d = result_dict["volatility"].iloc[-52:].mean()
+    average_daily_return = pct_change.iloc[-252:].mean()
+    max_vol = max(
         result_dict["ann_volatility"].iloc[-1],
+        result_dict["garch_volatility"].iloc[-1],
+        average_vol_30d,
+    )
+    kelly = kelly_crit(
+        average_daily_return * 252,
+        risk_free_rate_ticker,
+        max_vol,
     )
     # calculate the leverage factor for 20% volatility
     lev_20 = 20 / result_dict["ann_volatility"].iloc[-1]
@@ -298,9 +304,9 @@ def update_ticker_plot(ticker: str, risk_free_rate_ticker: float) -> go.Figure:
     fig.update_layout(
         title=f"<span style='font-size: 24px;'>Current Price and Volatility of {result_dict['name']}</span><br>"
         + "<span style='font-size: 4px;'></span><br>"
-        + f"<span style='font-size: 16px;'>Suggested Kelly Leverage Factor: {kelly:.2f}\
+        + f"<span style='font-size: 16px;'>Kelly Leverage Factor: {kelly:.2f}\
    -   Leverage @20% Volatility: {lev_20:.2f}\
-   -   Current 1%/5% PaR (last 5y): {par_1:.2f}%/{par_5:.2f}% of the Underlying</span>",
+   -   Current 1%/5% PaR (last 2y): {par_1:.2f}%/{par_5:.2f}%</span>",
         hovermode="x unified",
         yaxis=dict(
             title="Closing Prices", title_font=dict(color=st_blue), hoverformat=".2f"
