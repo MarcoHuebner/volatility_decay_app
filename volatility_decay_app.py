@@ -289,10 +289,13 @@ def update_ticker_plot(ticker: str, risk_free_rate_ticker: float) -> go.Figure:
         result_dict["garch_volatility"].iloc[-1],
         average_vol_30d,
     )
+    # add a safety margin of -2% ann. return and +3% ann. volatility
+    safety_return = -2
+    safety_vol = 3
     kelly = kelly_crit(
-        average_daily_return * 252,
+        average_daily_return * 252 + safety_return,
         risk_free_rate_ticker,
-        max_vol,
+        max_vol + safety_vol,
     )
     # calculate the leverage factor for 20% volatility
     lev_20 = 20 / result_dict["ann_volatility"].iloc[-1]
@@ -387,7 +390,7 @@ if __name__ == "__main__":
     input_er = st.number_input("Expected Yearly Return [%]", value=ann_return)
     # Text input for yearly risk free rate
     input_risk_free = st.number_input(
-        "Risk Free Yearly Return [%]", value=ann_risk_free
+        "Risk Free Yearly Return [%] (Costs)", value=ann_risk_free
     )
     # Text input for yearly return volatility
     input_volatility = st.number_input(
@@ -454,7 +457,7 @@ if __name__ == "__main__":
     )
     # Slider for the risk free rate
     risk_free_rate = st.slider(
-        "Risk Free Yearly Return [%]",
+        "Risk Free Yearly Return [%] (Costs)",
         min_value=0.0,
         max_value=8.0,
         value=3.0,
@@ -473,10 +476,22 @@ if __name__ == "__main__":
         or whether you are aiming for an annualized volatility of 20%, for example, 
         you can find suggestions below in view of current stock market prices as well 
         as forecasts for the percentage-at-risk (PaR) at empirical 1% and 5% levels 
-        based on the data of the last 5 years (if available) in order to put the Kelly 
+        based on the data of the last 2 years (if available) in order to put the Kelly 
         suggestions into perspective.\n
+        Keep in mind that an overestimation of returns and and an underestimation of
+        volatility can lead to an inflated allocation fraction and thus a significant 
+        loss of capital <a href="#footnote-1">[1]</a>. The Kelly Criterion is a 
+        powerful tool, but it is not a guarantee for success. It is important to use 
+        it in conjunction with other risk management strategies and to be aware of the 
+        limitations of the model and its assumptions.\n
         
-        Here are some common ticker symbols:<br>
+        Further Reading:
+        <p id="footnote-1">[1] E. Thorp, <a href=
+        "https://www.eecs.harvard.edu/cs286r/courses/fall12/papers/Thorpe_KellyCriterion2007.pdf">
+        THE KELLY CRITERION IN BLACKJACK SPORTS BETTING, AND THE STOCK MARKET</a>, 
+        Chapter 9, Handbook of Asset and Liability Management.</p>
+        
+        For the practical part, here are some common ticker symbols:<br>
         - ^GSPC: S&P 500 Index<br>
         - ^NDX: Nasdaq 100 Index<br>
         - AAPL: Apple Inc.<br>
@@ -498,7 +513,7 @@ if __name__ == "__main__":
     ticker_symbol = st.text_input("Ticker Symbol", value="^GSPC")
     # Slider for the risk free rate
     risk_free_rate_ticker = st.slider(
-        "Risk Free Yearly Return [%]",
+        "Risk Free Yearly Return [%] (Costs)",
         min_value=0.0,
         max_value=8.0,
         value=3.0,
