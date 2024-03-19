@@ -79,6 +79,113 @@ def leveraged_return_mesh(
     return np.round(mesh * 100, 2)
 
 
+def gmean(x: float, time_window: int = 1, days_in_year: int = 365):
+    return (x + 1) ** (time_window / days_in_year) - 1
+
+
+def performance_cumprod(returns: pd.Series) -> float:
+    """
+    Calculate the cumulative product of the returns.
+
+    :param returns: pd.Series, daily returns
+    :return: float, return on the last day in percent
+    """
+    return ((1 + returns).cumprod().iloc[-1] - 1) * 100
+
+
+def simplified_lev_factor(
+    daily_returns: pd.Series,
+    expense_ratio: float,
+    leverage: float = 1.0,
+    percent: float = 100.0,
+):
+    """
+    Calculate the daily returns of a factor with leverage using a simplified model.
+
+    :param daily_returns: pd.Series, daily returns of the underlying asset
+    :param expense_ratio: float, expense ratio of the factor (in percent)
+    :param leverage: float | pd.Series, leverage of the factor
+    :param percent: float, percentage factor used for expense ratio conversion
+    :return: pd.Series, daily returns of the factor with leverage
+    """
+    return daily_returns * leverage + gmean(-expense_ratio / percent)
+
+
+def simplified_knockout(
+    price: pd.Series,
+    expense_ratio: float,
+    initial_leverage: float,
+    percent: float = 100,
+) -> pd.Series:
+    """
+    Calculate the daily returns of a knockout product using a simplified model.
+
+    :param price: pd.Series, price of the underlying asset
+    :param expense_ratio: float, expense ratio of the knockout product (in percent)
+    :param initial_leverage: float, initial leverage factor of the knockout product
+    :param percent: float, percentage factor used for expense ratio conversion
+    :return: pd.Series, daily returns of the knockout product
+    """
+    # compute knockout barrier, incl. expense ratio estimation
+    ko_val = (
+        price.iloc[0] * (1 - (1 / initial_leverage)) * (1 - expense_ratio / percent)
+    )
+    # compute daily returns
+    pct_change = (price - ko_val).pct_change()
+
+    # get first knockout event (if it exists)
+    mask = price.le(ko_val)
+    index = mask.idxmax()
+
+    if mask[index]:
+        # set all following returns to zero to stay at the knockout level
+        pct_change.loc[index:] = 0
+    else:
+        pass
+
+    return pct_change
+
+
+def kelly_leverage(
+    daily_returns: pd.Series,
+    yearly_risk_free: float = 2.0,
+    time_window: int = 60,
+    safety: bool = True,
+) -> pd.Series:
+    """
+    Compute the Kelly leverage fraction for a given time window based on the
+    past 60 day returns and 60 day volatility.
+
+    :param daily_returns: pd.Series, daily returns of the underlying asset
+    :param yearly_risk_free: float, yearly risk-free rate in percent
+    :param time_window: int, time window for the rolling average
+    :param safety: bool, whether to apply safety margins
+    :return: pd.Series, Kelly leverage fraction
+    """
+    # get rolling average returns and volatility, excluding the current day
+    rolling_returns_estimate = (
+        daily_returns.shift(1).rolling(window=time_window).mean() * time_window
+    )
+    rolling_volatility_estimate = (
+        daily_returns.shift(1).rolling(window=time_window).std() * time_window**0.5
+    )
+    # get the risk-free rate for the time window
+    time_window_risk_free = gmean(yearly_risk_free / 100, time_window=time_window)
+
+    # add safety margins (underestimation of returns, overestimation of volatility)
+    if safety:
+        rolling_returns_estimate = rolling_returns_estimate - 0.02
+        rolling_volatility_estimate = rolling_volatility_estimate + 0.03
+
+    # calculate the Kelly leverage fraction
+    leverage = (
+        rolling_returns_estimate - time_window_risk_free
+    ) / rolling_volatility_estimate**2
+
+    # replace nan values with 1
+    return leverage.fillna(1.0)
+
+
 # define yfinance functions
 def fetch_ticker_data(ticker: str) -> dict[str, Union[str, pd.Series]]:
     """

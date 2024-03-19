@@ -22,7 +22,14 @@ import numpy as np
 import plotly.graph_objects as go
 import streamlit as st
 
-from utils import fetch_ticker_data, leveraged_return_mesh
+from utils import (
+    fetch_ticker_data,
+    kelly_leverage,
+    leveraged_return_mesh,
+    performance_cumprod,
+    simplified_knockout,
+    simplified_lev_factor,
+)
 
 
 # define display functions
@@ -192,7 +199,7 @@ def update_kelly_plot(data_source: str, risk_free_rate: float) -> go.Figure:
 # define the ticker price data plot
 def update_ticker_plot(ticker: str, risk_free_rate_ticker: float) -> go.Figure:
     # create the plotly figure
-    fig = go.Figure()  # make_subplots(specs=[[{"secondary_y": True}]])
+    fig = go.Figure()
     # define colours, loosely related to the streamlit default colours
     # https://discuss.streamlit.io/t/access-streamlit-default-color-palette/35737
     st_blue = "#83c9ff"
@@ -308,8 +315,8 @@ def update_ticker_plot(ticker: str, risk_free_rate_ticker: float) -> go.Figure:
         title=f"<span style='font-size: 24px;'>Current Price and Volatility of {result_dict['name']}</span><br>"
         + "<span style='font-size: 4px;'></span><br>"
         + f"<span style='font-size: 16px;'>Kelly Leverage Factor: {kelly:.2f}\
-   -   Leverage @20% Volatility: {lev_20:.2f}\
-   -   Current 1%/5% PaR (last 2y): {par_1:.2f}%/{par_5:.2f}%</span>",
+    -   Leverage @20% Volatility: {lev_20:.2f}\
+    -   Current 1%/5% PaR (last 2y): {par_1:.2f}%/{par_5:.2f}%</span>",
         hovermode="x unified",
         yaxis=dict(
             title="Closing Prices", title_font=dict(color=st_blue), hoverformat=".2f"
@@ -336,6 +343,177 @@ def update_ticker_plot(ticker: str, risk_free_rate_ticker: float) -> go.Figure:
         0, min(252, len(result_dict["price"])) - 1, num_ticks, endpoint=True, dtype=int
     )
     tickvals = [result_dict["price"].iloc[-252:].index[id] for id in tickids]
+    ticktext = [val.strftime("%Y-%m-%d") for val in tickvals]
+    fig.update_xaxes(
+        tickvals=tickvals,
+        ticktext=ticktext,
+        domain=[0.0, 0.89],
+    )
+
+    return fig
+
+
+# define the past leverage and knock out returns plot
+def update_derivatives_performance_plot(
+    ticker: str, risk_free_rate_ticker: float, leverage: float, expenses: float
+) -> go.Figure:
+    # create the plotly figure
+    fig = go.Figure()
+    # define colours, loosely related to the streamlit default colours
+    # https://discuss.streamlit.io/t/access-streamlit-default-color-palette/35737
+    st_blue = "#83c9ff"
+    st_dark_blue = "#0068c9"
+    st_darker_blue = "#0054a3"
+    st_red = "#ff2b2b"
+    st_green = "#21c354"
+
+    # get data
+    result_dict = fetch_ticker_data(ticker)
+    price = result_dict["price"].tail(252)
+    pct_change = result_dict["price"].pct_change()
+
+    # how have derivatives bought with kelly criterion > 5 performed in the past?
+    # show results of 15 day intervals
+    kelly_crit = kelly_leverage(pct_change, risk_free_rate_ticker).tail(252)
+    pct_change = pct_change.tail(252)
+    # get days on which the kelly criterion was > 5
+    dates_iloc = np.where(kelly_crit > 5)[0]
+    # dates_iloc = dates_iloc[dates_iloc < (252 - 15)]
+    # get all possible 15 day interval returns
+    returns_1x = [
+        performance_cumprod(pct_change.iloc[date : date + 15]) for date in dates_iloc
+    ]
+    returns_lev = [
+        performance_cumprod(
+            simplified_lev_factor(pct_change.iloc[date : date + 15], expenses, leverage)
+        )
+        for date in dates_iloc
+    ]
+    returns_ko = [
+        performance_cumprod(
+            simplified_knockout(price.iloc[date : date + 15], expenses, leverage)
+        )
+        for date in dates_iloc
+    ]
+
+    # add price line
+    fig.add_trace(
+        go.Scatter(
+            x=price.index,
+            y=price,
+            mode="lines",
+            name="Closing Price",
+            line=dict(color=st_blue),
+        )
+    )
+    # add unleveraged returns
+    fig.add_trace(
+        go.Scatter(
+            x=price.index[dates_iloc],
+            y=returns_1x,
+            mode="markers",
+            name="Underlying",
+            yaxis="y2",
+            marker=dict(color=st_green, symbol="circle"),
+        )
+    )
+    # add leveraged factor returns
+    fig.add_trace(
+        go.Scatter(
+            x=price.index[dates_iloc],
+            y=returns_lev,
+            mode="markers",
+            name=f"{leverage}x Factor",
+            yaxis="y2",
+            marker=dict(color=st_dark_blue, symbol="triangle-up"),
+        )
+    )
+    # add knockout returns
+    fig.add_trace(
+        go.Scatter(
+            x=price.index[dates_iloc],
+            y=returns_ko,
+            mode="markers",
+            name=f"{leverage}x Knockout",
+            yaxis="y2",
+            marker=dict(color=st_darker_blue, symbol="square"),
+        )
+    )
+    # add zero line
+    fig.add_shape(
+        type="line",
+        xref="x",
+        yref="y2",
+        x0=price.index[0],
+        y0=0,
+        x1=price.index[-1],
+        y1=0,
+        line=dict(
+            color=st_darker_blue,
+            width=2,
+            dash="dash",
+        ),
+    )
+    # add last 15 day cut-off line
+    fig.add_shape(
+        type="line",
+        xref="x",
+        yref="y2",
+        x0=price.index[-15],
+        y0=min(min(returns_1x), min(returns_lev), min(returns_ko)),
+        x1=price.index[-15],
+        y1=max(max(returns_1x), max(returns_lev), max(returns_ko)),
+        line=dict(
+            color=st_darker_blue,
+            width=2,
+            dash="dash",
+        ),
+    )
+    # add leverage factor
+    fig.add_trace(
+        go.Scatter(
+            x=kelly_crit.index,
+            y=kelly_crit,
+            mode="lines",
+            name="Kelly Leverage Factor",
+            yaxis="y3",
+            line=dict(color=st_red),
+            visible="legendonly",
+        )
+    )
+
+    # update layout
+    fig.update_layout(
+        title=f"<span style='font-size: 24px;'>How Derivatives of {result_dict['name']} Performed</span><br>"
+        + "<span style='font-size: 4px;'></span><br>"
+        + f"<span style='font-size: 16px;'>Given a 60-day Rolling Kelly Leverage Factor as Signal\
+    -   Amount of Signals in the Past 252 Trading Days: {len(dates_iloc)}</span>",
+        hovermode="x unified",
+        yaxis=dict(
+            title="Closing Prices", title_font=dict(color=st_blue), hoverformat=".2f"
+        ),
+        yaxis2=dict(
+            title="Returns @ Buy Date + 15 Days [%]",
+            side="right",
+            overlaying="y",
+            title_font=dict(color=st_dark_blue),
+            hoverformat=".2f",
+        ),
+        yaxis3=dict(
+            title="Proposed Leverage Factor",
+            side="right",
+            overlaying="y",
+            position=0.96,
+            title_font=dict(color=st_red),
+            hoverformat=".2f",
+        ),
+    )
+    # set x-ticks
+    num_ticks = 10
+    tickids = np.linspace(
+        0, min(252, len(price)) - 1, num_ticks, endpoint=True, dtype=int
+    )
+    tickvals = [price.index[id] for id in tickids]
     ticktext = [val.strftime("%Y-%m-%d") for val in tickvals]
     fig.update_xaxes(
         tickvals=tickvals,
@@ -522,5 +700,30 @@ if __name__ == "__main__":
     )
     st.plotly_chart(
         update_ticker_plot(ticker_symbol, risk_free_rate_ticker),
+        use_container_width=True,
+    )
+    # Slider for the leverage of the derivatives
+    derivative_leverage = st.slider(
+        "Leverage of the Derivatives",
+        min_value=0.0,
+        max_value=10.0,
+        value=3.0,
+        step=0.25,
+    )
+    # Slider for the expenses of the derivatives
+    derivative_expenses = st.slider(
+        "Yearly Expense Ratio of the Derivatives",
+        min_value=0.0,
+        max_value=5.0,
+        value=3.0,
+        step=0.25,
+    )
+    st.plotly_chart(
+        update_derivatives_performance_plot(
+            ticker_symbol,
+            risk_free_rate_ticker,
+            derivative_leverage,
+            derivative_expenses,
+        ),
         use_container_width=True,
     )
