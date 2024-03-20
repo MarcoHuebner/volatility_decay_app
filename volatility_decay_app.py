@@ -355,7 +355,11 @@ def update_ticker_plot(ticker: str, risk_free_rate_ticker: float) -> go.Figure:
 
 # define the past leverage and knock out returns plot
 def update_derivatives_performance_plot(
-    ticker: str, risk_free_rate_ticker: float, leverage: float, expenses: float
+    ticker: str,
+    risk_free_rate_ticker: float,
+    leverage: float,
+    expenses: float,
+    time_window: int,
 ) -> go.Figure:
     # create the plotly figure
     fig = go.Figure()
@@ -374,7 +378,9 @@ def update_derivatives_performance_plot(
 
     # how have derivatives bought with kelly criterion > 5 performed in the past?
     # show results of 15 day intervals
-    kelly_crit = kelly_leverage(pct_change, risk_free_rate_ticker).tail(252)
+    kelly_crit = kelly_leverage(
+        pct_change, risk_free_rate_ticker, time_window=time_window
+    ).tail(252)
     pct_change = pct_change.tail(252)
     # get days on which the kelly criterion was > 5
     dates_iloc = np.where(kelly_crit > 5)[0]
@@ -395,6 +401,9 @@ def update_derivatives_performance_plot(
         )
         for date in dates_iloc
     ]
+    # Calculate opacities based on comparison of returns
+    opacities_lev = [0.3 if lev <= ko else 1.0 for lev, ko in zip(returns_lev, returns_ko)]
+    opacities_ko = [0.3 if ko < lev else 1.0 for lev, ko in zip(returns_lev, returns_ko)]
 
     # add price line
     fig.add_trace(
@@ -425,7 +434,7 @@ def update_derivatives_performance_plot(
             mode="markers",
             name=f"{leverage}x Factor",
             yaxis="y2",
-            marker=dict(color=st_dark_blue, symbol="triangle-up"),
+            marker=dict(color=st_dark_blue, symbol="triangle-up", opacity=opacities_lev),
         )
     )
     # add knockout returns
@@ -436,7 +445,7 @@ def update_derivatives_performance_plot(
             mode="markers",
             name=f"{leverage}x Knockout",
             yaxis="y2",
-            marker=dict(color=st_darker_blue, symbol="square"),
+            marker=dict(color=st_darker_blue, symbol="square", opacity=opacities_ko),
         )
     )
     # add zero line
@@ -479,6 +488,20 @@ def update_derivatives_performance_plot(
             yaxis="y3",
             line=dict(color=st_red),
             visible="legendonly",
+            legendgroup="group1",
+        )
+    )
+    # add typical leverage cutoff
+    fig.add_trace(
+        go.Scatter(
+            x=[kelly_crit.index.min(), kelly_crit.index.max()],
+            y=[5, 5],
+            mode="lines",
+            yaxis="y3",
+            line=dict(color=st_red, dash='dash'),
+            visible="legendonly",
+            legendgroup="group1",
+            showlegend=False,
         )
     )
 
@@ -718,12 +741,22 @@ if __name__ == "__main__":
         value=3.0,
         step=0.25,
     )
+    # Slider for the Kelly leverage time window
+    look_back_window = st.slider(
+        "Kelly Leverage Look-Back Window [Trading Days]",
+        min_value=10,
+        max_value=100,
+        value=60,
+        step=10,
+        format="%d",
+    )
     st.plotly_chart(
         update_derivatives_performance_plot(
             ticker_symbol,
             risk_free_rate_ticker,
             derivative_leverage,
             derivative_expenses,
+            look_back_window,
         ),
         use_container_width=True,
     )
