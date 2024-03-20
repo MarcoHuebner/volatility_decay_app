@@ -119,6 +119,8 @@ def simplified_knockout(
 ) -> pd.Series:
     """
     Calculate the daily returns of a knockout product using a simplified model.
+    Working with closing prices, this supposes the knockout was bought at the
+    closing course of the first day, making zero returns on the first day.
 
     :param price: pd.Series, price of the underlying asset
     :param expense_ratio: float, expense ratio of the knockout product (in percent)
@@ -143,7 +145,7 @@ def simplified_knockout(
     else:
         pass
 
-    return pct_change
+    return pct_change.fillna(0)
 
 
 def kelly_leverage(
