@@ -219,7 +219,7 @@ def fetch_ticker_data(ticker: str) -> dict[str, Union[str, pd.Series]]:
             "price": data,
             "volatility": estimated_annualized_volatility(data_high, data_low),
             "ann_volatility": empirical_annualized_volatility(data),
-            "garch_volatility": garch_estimated_volatility(data),
+            # "garch_volatility": garch_estimated_volatility(data),
             "ma50": ma50.loc[starting_date_1y:],
             "ma200": ma200.loc[starting_date_1y:],
         }

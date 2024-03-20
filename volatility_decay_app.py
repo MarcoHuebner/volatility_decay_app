@@ -265,13 +265,15 @@ def update_ticker_plot(ticker: str, risk_free_rate_ticker: float) -> go.Figure:
     # add garch volatility
     fig.add_trace(
         go.Scatter(
-            x=result_dict["garch_volatility"].index,
-            y=result_dict["garch_volatility"],
-            mode="lines",
+            x=[result_dict["ann_volatility"].index[0]],
+            y=[result_dict["ann_volatility"].min()],
+            mode="text",
             name="GARCH Forecast Volatility",
+            text=["Discontinued, see source code."],
+            textfont=dict(size=10, color=st_light_red),
+            textposition="top right",
             yaxis="y2",
             visible="legendonly",
-            line=dict(color=st_light_red, dash="dash"),
         )
     )
     # add daily percentage change
@@ -293,7 +295,7 @@ def update_ticker_plot(ticker: str, risk_free_rate_ticker: float) -> go.Figure:
     average_daily_return = pct_change.iloc[-252:].mean()
     max_vol = max(
         result_dict["ann_volatility"].iloc[-1],
-        result_dict["garch_volatility"].iloc[-1],
+        # result_dict["garch_volatility"].iloc[-1],
         average_vol_30d,
     )
     # add a safety margin of -2% ann. return and +3% ann. volatility
@@ -402,8 +404,12 @@ def update_derivatives_performance_plot(
         for date in dates_iloc
     ]
     # Calculate opacities based on comparison of returns
-    opacities_lev = [0.3 if lev <= ko else 1.0 for lev, ko in zip(returns_lev, returns_ko)]
-    opacities_ko = [0.3 if ko < lev else 1.0 for lev, ko in zip(returns_lev, returns_ko)]
+    opacities_lev = [
+        0.3 if lev <= ko else 1.0 for lev, ko in zip(returns_lev, returns_ko)
+    ]
+    opacities_ko = [
+        0.3 if ko < lev else 1.0 for lev, ko in zip(returns_lev, returns_ko)
+    ]
 
     # add price line
     fig.add_trace(
@@ -434,7 +440,9 @@ def update_derivatives_performance_plot(
             mode="markers",
             name=f"{leverage}x Factor",
             yaxis="y2",
-            marker=dict(color=st_dark_blue, symbol="triangle-up", opacity=opacities_lev),
+            marker=dict(
+                color=st_dark_blue, symbol="triangle-up", opacity=opacities_lev
+            ),
         )
     )
     # add knockout returns
@@ -498,7 +506,7 @@ def update_derivatives_performance_plot(
             y=[5, 5],
             mode="lines",
             yaxis="y3",
-            line=dict(color=st_red, dash='dash'),
+            line=dict(color=st_red, dash="dash"),
             visible="legendonly",
             legendgroup="group1",
             showlegend=False,
