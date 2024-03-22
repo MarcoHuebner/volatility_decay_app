@@ -361,6 +361,7 @@ def update_derivatives_performance_plot(
     risk_free_rate_ticker: float,
     leverage: float,
     expenses: float,
+    rel_transact_costs: float,
     time_window: int,
 ) -> go.Figure:
     # create the plotly figure
@@ -393,13 +394,20 @@ def update_derivatives_performance_plot(
     ]
     returns_lev = [
         performance_cumprod(
-            simplified_lev_factor(pct_change.iloc[date : date + 15], expenses, leverage)
+            simplified_lev_factor(
+                pct_change.iloc[date : date + 15],
+                expenses,
+                rel_transact_costs,
+                leverage,
+            )
         )
         for date in dates_iloc
     ]
     returns_ko = [
         performance_cumprod(
-            simplified_knockout(price.iloc[date : date + 15], expenses, leverage)
+            simplified_knockout(
+                price.iloc[date : date + 15], expenses, rel_transact_costs, leverage
+            )
         )
         for date in dates_iloc
     ]
@@ -743,7 +751,15 @@ if __name__ == "__main__":
     )
     # Slider for the expenses of the derivatives
     derivative_expenses = st.slider(
-        "Yearly Expense Ratio of the Derivatives",
+        "Yearly Expense Ratio of the Derivatives [%]",
+        min_value=0.0,
+        max_value=5.0,
+        value=3.0,
+        step=0.25,
+    )
+    # Slider for the transaction costs of the derivatives
+    rel_transact_costs = st.slider(
+        "Transaction Costs for Buying and Selling Separately [%]",
         min_value=0.0,
         max_value=5.0,
         value=3.0,
@@ -764,6 +780,7 @@ if __name__ == "__main__":
             risk_free_rate_ticker,
             derivative_leverage,
             derivative_expenses,
+            rel_transact_costs,
             look_back_window,
         ),
         use_container_width=True,

@@ -96,6 +96,7 @@ def performance_cumprod(returns: pd.Series) -> float:
 def simplified_lev_factor(
     daily_returns: pd.Series,
     expense_ratio: float,
+    rel_transact_costs: float,
     leverage: float = 1.0,
     percent: float = 100.0,
 ):
@@ -104,16 +105,24 @@ def simplified_lev_factor(
 
     :param daily_returns: pd.Series, daily returns of the underlying asset
     :param expense_ratio: float, expense ratio of the factor (in percent)
+    :param rel_transact_costs: float, cost ratio assumed for each buy and sell transaction (in percent)
     :param leverage: float | pd.Series, leverage of the factor
     :param percent: float, percentage factor used for expense ratio conversion
     :return: pd.Series, daily returns of the factor with leverage
     """
-    return daily_returns * leverage + gmean(-expense_ratio / percent)
+    daily_returns = daily_returns * leverage + gmean(-expense_ratio / percent)
+    
+    # simplify: Assume the costs consist of only volume depend costs, neglecting fixed costs
+    daily_returns.iloc[0] -= rel_transact_costs / percent
+    daily_returns.iloc[-1] -= rel_transact_costs / percent
+
+    return daily_returns
 
 
 def simplified_knockout(
     price: pd.Series,
     expense_ratio: float,
+    rel_transact_costs: float,
     initial_leverage: float,
     percent: float = 100,
 ) -> pd.Series:
@@ -124,6 +133,7 @@ def simplified_knockout(
 
     :param price: pd.Series, price of the underlying asset
     :param expense_ratio: float, expense ratio of the knockout product (in percent)
+    :param rel_transact_costs: float, cost ratio assumed for each buy and sell transaction (in percent)
     :param initial_leverage: float, initial leverage factor of the knockout product
     :param percent: float, percentage factor used for expense ratio conversion
     :return: pd.Series, daily returns of the knockout product
@@ -144,6 +154,10 @@ def simplified_knockout(
         pct_change.loc[index:] = 0
     else:
         pass
+
+    # simplify: Assume the costs consist of only volume depend costs, neglecting fixed costs
+    pct_change.iloc[0] -= rel_transact_costs / percent
+    pct_change.iloc[-1] -= rel_transact_costs / percent
 
     return pct_change.fillna(0)
 
