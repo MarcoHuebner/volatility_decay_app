@@ -8,6 +8,7 @@ from tqdm import tqdm
 
 import numpy as np
 import pandas as pd
+import streamlit as st
 import yfinance
 from arch import arch_model
 
@@ -203,6 +204,7 @@ def kelly_leverage(
 
 
 # define yfinance functions
+@st.cache_data(ttl=3600, show_spinner=False)  # cache for 1 hour
 def fetch_ticker_data(ticker: str) -> dict[str, Union[str, pd.Series]]:
     """
     Fetch the stock data from Yahoo Finance API via yfinance and calculate the
