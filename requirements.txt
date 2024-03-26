@@ -3,6 +3,5 @@ numpy
 plotly
 streamlit
 tqdm
-typing
-yfinance==0.2.33
+yfinance==0.2.37
 ipywidgets>=7.0.0

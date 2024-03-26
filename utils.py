@@ -3,14 +3,15 @@ Utility functions for the app.
 
 """
 
-from typing import Union
-from tqdm import tqdm
+from datetime import timedelta
 
 import numpy as np
 import pandas as pd
+import plotly.graph_objects as go
 import streamlit as st
 import yfinance
 from arch import arch_model
+from tqdm import tqdm
 
 
 # define the mathematical functions
@@ -205,14 +206,14 @@ def kelly_leverage(
 
 # define yfinance functions
 @st.cache_data(ttl=3600, show_spinner=False)  # cache for 1 hour
-def fetch_ticker_data(ticker: str) -> dict[str, Union[str, pd.Series]]:
+def fetch_ticker_data(ticker: str) -> dict[str, str | pd.Series | pd.DataFrame]:
     """
     Fetch the stock data from Yahoo Finance API via yfinance and calculate the
     50-day and 200-day moving average (MA).
 
     :param ticker: str, ticker symbol of the stock
-    :return: dict[str, Union[str,pd.Series]], name, stock closing, daily high and low
-                                              price data, 50-day MA, 200-day MA
+    :return: dict, contains name, stock closing price, ann. vol., 30-day vol.,
+                   50-day MA, 200-day MA, earnings dates (if available)
     """
     # Fetch the stock price data from Yahoo Finance API via yfinance
     lazy_dict = yfinance.Ticker(ticker)
@@ -242,6 +243,7 @@ def fetch_ticker_data(ticker: str) -> dict[str, Union[str, pd.Series]]:
             # "garch_volatility": garch_estimated_volatility(data),
             "ma50": ma50.loc[starting_date_1y:],
             "ma200": ma200.loc[starting_date_1y:],
+            "earnings": lazy_dict.get_earnings_dates(),
         }
         return result_dict
 
@@ -329,12 +331,17 @@ def empirical_var(data: pd.Series, alpha: float) -> float:
 
 
 # define the helper functions
-def xaxis_slider():
+def xaxis_slider(
+    reference_data: pd.Series,
+) -> dict[str, dict[str, list[dict[str, str]]]]:
     """
     Create a slider for the x-axis of the plotly graph.
 
     :return: dict, slider for the x-axis
     """
+    current_date = reference_data.index[-1]
+
+    # define the slider
     xaxis_with_slider = dict(
         rangeselector=dict(
             buttons=list(
@@ -349,6 +356,56 @@ def xaxis_slider():
         ),
         rangeslider=dict(visible=True),
         type="date",
+        range=[current_date - timedelta(days=365), current_date],
     )
 
     return xaxis_with_slider
+
+
+def plot_earnings_dates(
+    earnings: pd.Series, reference_data: pd.Series, fig: go.Figure
+) -> go.Figure:
+    """
+    Add vertical dashed lines for each earning date within the past
+    365 and upcoming 90 days to the figure.
+
+    :param earnings: pd.Series, the earnings dates
+    :param reference_data: pd.Series, the reference data
+    :param fig: go.Figure, the plotly figure
+    :return: go.Figure, the updated plotly figure
+    """
+    # Filter earnings dates to the last year and the next 90 days
+    dates = earnings.index
+    current_date = reference_data.index[-1]
+    start_date = current_date - timedelta(days=365)
+    end_date = current_date + timedelta(days=90)
+    filtered_dates = dates[(dates >= start_date) & (dates <= end_date)]
+
+    # Add dummy scatter trace for the legend
+    fig.add_trace(
+        go.Scatter(
+            x=[None],
+            y=[None],
+            mode="lines",
+            line=dict(color="LightSeaGreen", width=2, dash="dash"),
+            name="Earnings",
+        )
+    )
+
+    # Plot vertical dashed lines for each date
+    for date in filtered_dates:
+        fig.add_shape(
+            type="line",
+            x0=date,
+            x1=date,
+            y0=0,
+            y1=1,
+            yref="paper",
+            line=dict(
+                color="LightSeaGreen",
+                width=2,
+                dash="dash",
+            ),
+        )
+
+    return fig

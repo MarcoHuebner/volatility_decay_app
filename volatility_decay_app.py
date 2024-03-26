@@ -19,6 +19,7 @@ ipywidgets>=7.0.0
 """
 
 import numpy as np
+import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
@@ -27,11 +28,11 @@ from utils import (
     kelly_leverage,
     leveraged_return_mesh,
     performance_cumprod,
+    plot_earnings_dates,
     simplified_knockout,
     simplified_lev_factor,
     xaxis_slider,
 )
-
 
 # define display functions
 ann_return = 0.037 * 252
@@ -212,11 +213,15 @@ def update_ticker_plot(ticker: str, risk_free_rate_ticker: float) -> go.Figure:
 
     # get data
     result_dict = fetch_ticker_data(ticker)
+    price = result_dict["price"].tail(252)
+    # get earning dates if not None (e.g. for indices)
+    if result_dict["earnings"] is not None:
+        earnings = result_dict["earnings"]["Reported EPS"]
     # add price line
     fig.add_trace(
         go.Scatter(
-            x=result_dict["price"].index[-252:],
-            y=result_dict["price"].iloc[-252:],
+            x=price.index,
+            y=price,
             mode="lines",
             name="Closing Price",
             line=dict(color=st_blue),
@@ -281,7 +286,7 @@ def update_ticker_plot(ticker: str, risk_free_rate_ticker: float) -> go.Figure:
     pct_change = result_dict["price"].pct_change() * 100
     fig.add_trace(
         go.Scatter(
-            x=result_dict["price"].index[-252:],
+            x=price.index,
             y=pct_change.iloc[-252:],
             mode="lines",
             name="Daily Returns",
@@ -290,6 +295,9 @@ def update_ticker_plot(ticker: str, risk_free_rate_ticker: float) -> go.Figure:
             line=dict(color=st_green),
         )
     )
+    if result_dict["earnings"] is not None:
+        # add earnings dates
+        fig = plot_earnings_dates(earnings, price, fig)
 
     # calculate the Kelly Criterion with maximum of the three volatilities
     average_vol_30d = result_dict["30_d_volatility_vix"].iloc[-52:].mean()
@@ -339,7 +347,7 @@ def update_ticker_plot(ticker: str, risk_free_rate_ticker: float) -> go.Figure:
             title_font=dict(color=st_green),
             hoverformat=".2f",
         ),
-        xaxis=xaxis_slider(),
+        xaxis=xaxis_slider(price),
     )
     # update x width
     fig.update_xaxes(
@@ -373,6 +381,9 @@ def update_derivatives_performance_plot(
     result_dict = fetch_ticker_data(ticker)
     price = result_dict["price"].tail(252)
     pct_change = result_dict["price"].pct_change()
+    # get earning dates if not None (e.g. for indices)
+    if result_dict["earnings"] is not None:
+        earnings = result_dict["earnings"]["Reported EPS"]
 
     # how have derivatives bought with kelly criterion > 5 performed in the past?
     # show results of holding_period day intervals
@@ -427,6 +438,9 @@ def update_derivatives_performance_plot(
             line=dict(color=st_blue),
         )
     )
+    if result_dict["earnings"] is not None:
+        # add earnings dates
+        fig = plot_earnings_dates(earnings, price, fig)
     # add unleveraged returns
     fig.add_trace(
         go.Scatter(
@@ -545,7 +559,7 @@ def update_derivatives_performance_plot(
             title_font=dict(color=st_red),
             hoverformat=".2f",
         ),
-        xaxis=xaxis_slider(),
+        xaxis=xaxis_slider(price),
     )
     # update x width
     fig.update_xaxes(
@@ -590,7 +604,9 @@ if __name__ == "__main__":
         unsafe_allow_html=True,
     )
 
-    tab1, tab2, tab3 = st.tabs(["Kelly Theory", "Investments", "Stock Universe Screener (WIP)"])
+    tab1, tab2, tab3 = st.tabs(
+        ["Kelly Theory", "Investments", "Stock Universe Screener (WIP)"]
+    )
 
     with tab1:
         # Header for the Kelly Criterion
@@ -677,9 +693,10 @@ if __name__ == "__main__":
         )
         # Placeholder for the graph
         st.plotly_chart(
-            update_kelly_plot(data_source_kelly, risk_free_rate), use_container_width=True
+            update_kelly_plot(data_source_kelly, risk_free_rate),
+            use_container_width=True,
         )
-        
+
     with tab2:
         # Header for the ticker price data plot
         st.markdown("", unsafe_allow_html=True)
