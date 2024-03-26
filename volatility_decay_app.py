@@ -590,200 +590,210 @@ if __name__ == "__main__":
         unsafe_allow_html=True,
     )
 
-    # Header for the Kelly Criterion
-    st.markdown("", unsafe_allow_html=True)
-    st.write(
-        "## [Kelly Criterion](https://rhsfinancial.com/2017/06/20/line-aggressive-crazy-leverage/) Calculator (Annualized)"
-    )
-    # Text input for yearly expected return
-    input_er = st.number_input("Expected Yearly Return [%]", value=ann_return)
-    # Text input for yearly risk free rate
-    input_risk_free = st.number_input(
-        "Risk Free Yearly Return [%] (Costs)", value=ann_risk_free
-    )
-    # Text input for yearly return volatility
-    input_volatility = st.number_input(
-        "Annualized Volatility of the Underlying [%]", value=ann_vol
-    )
-    # Display the result
-    result = update_result(input_er, input_risk_free, input_volatility)
-    st.write(result)
+    tab1, tab2, tab3 = st.tabs(["Kelly Theory", "Investments", "Stock Universe Screener (WIP)"])
 
-    # Header for the plot
-    st.markdown("", unsafe_allow_html=True)
-    st.write("## Gain of the LETF over the Unleveraged ETF")
-    st.markdown(
-        """
-        The difference in profit of the hypothetical leveraged ETF is 
-        compared to the unleveraged ETF below. It becomes clear that 
-        the profit does not increase linearly with leverage and the 
-        margin of error becomes smaller and smaller, especially with 
-        higher leverage.
-        """
-    )
-    # Dropdown for the plot style
-    data_source = st.selectbox("Plot Style", ["Heatmap", "Contour"], index=1)
-    # Slider for leverage
-    leverage = st.slider(
-        "Exposure to the Market (Leverage) [%]",
-        min_value=0.0,
-        max_value=1000.0,
-        value=lev_r * 100,
-        step=10.0,
-    )
-    # Slider for TER
-    ter = st.slider(
-        "TER of the ETF [%]", min_value=0.0, max_value=2.0, value=exp_r, step=0.05
-    )
-    # Slider for LIBOR
-    libor = st.slider(
-        "LIBOR rate [%]", min_value=0.0, max_value=4.0, value=libor, step=0.1
-    )
-    # Placeholder for the graph
-    st.plotly_chart(
-        update_plot(data_source, leverage, ter, libor), use_container_width=True
-    )
+    with tab1:
+        # Header for the Kelly Criterion
+        st.markdown("", unsafe_allow_html=True)
+        st.write(
+            "## [Kelly Criterion](https://rhsfinancial.com/2017/06/20/line-aggressive-crazy-leverage/) Calculator (Annualized)"
+        )
+        # Text input for yearly expected return
+        input_er = st.number_input("Expected Yearly Return [%]", value=ann_return)
+        # Text input for yearly risk free rate
+        input_risk_free = st.number_input(
+            "Risk Free Yearly Return [%] (Costs)", value=ann_risk_free
+        )
+        # Text input for yearly return volatility
+        input_volatility = st.number_input(
+            "Annualized Volatility of the Underlying [%]", value=ann_vol
+        )
+        # Display the result
+        result = update_result(input_er, input_risk_free, input_volatility)
+        st.write(result)
 
-    # Header for the Kelly Criterion plot
-    st.markdown("", unsafe_allow_html=True)
-    st.write("## Ideal Market Exposure (Leverage) According to the Kelly Criterion")
-    st.markdown(
-        """
-        In contrast to the previous figure, the ideal leverage factor, which 
-        is determined by the Kelly criterion, shows an even stronger dependence 
-        on volatility and thus an even smaller margin of error. This is due 
-        to the fact that the Kelly criterion maximizes the expected geometric 
-        growth rate, thus avoiding the 
-        ['Just One More Paradox'](https://www.youtube.com/watch?v=_FuuYSM7yOo&), 
-        which describes the phenomenon of a median loss even though the expected 
-        value of every bet and thus the overall expected value (mean) is positive.
-        """,
-        unsafe_allow_html=True,
-    )
-    # Dropdown for the plot style
-    data_source_kelly = st.selectbox(
-        "Plot Style", ["Heatmap", "Contour"], index=1, key="kelly"
-    )
-    # Slider for the risk free rate
-    risk_free_rate = st.slider(
-        "Risk Free Yearly Return [%] (Costs)",
-        min_value=0.0,
-        max_value=8.0,
-        value=3.0,
-        step=0.25,
-    )
-    # Placeholder for the graph
-    st.plotly_chart(
-        update_kelly_plot(data_source_kelly, risk_free_rate), use_container_width=True
-    )
-    # Header for the ticker price data plot
-    st.markdown("", unsafe_allow_html=True)
-    st.write("## What Does All This Imply for My Investments?")
-    st.markdown(
-        """
-        Depending on whether you want to pursue a maximally aggressive Kelly strategy 
-        or whether you are aiming for an annualized volatility of 20%, for example, 
-        you can find suggestions below in view of current stock market prices as well 
-        as forecasts for the percentage-at-risk (PaR) at empirical 1% and 5% levels 
-        based on the data of the last 2 years (if available) in order to put the Kelly 
-        suggestions into perspective.\n
-        Keep in mind that an overestimation of returns and and an underestimation of
-        volatility can lead to an inflated allocation fraction and thus a significant 
-        loss of capital <a href="#footnote-1">[1]</a>. The Kelly Criterion is a 
-        powerful tool, but it is not a guarantee for success. It is important to use 
-        it in conjunction with other risk management strategies and to be aware of the 
-        limitations of the model and its assumptions.\n
+        # Header for the plot
+        st.markdown("", unsafe_allow_html=True)
+        st.write("## Gain of the LETF over the Unleveraged ETF")
+        st.markdown(
+            """
+            The difference in profit of the hypothetical leveraged ETF is 
+            compared to the unleveraged ETF below. It becomes clear that 
+            the profit does not increase linearly with leverage and the 
+            margin of error becomes smaller and smaller, especially with 
+            higher leverage.
+            """
+        )
+        # Dropdown for the plot style
+        data_source = st.selectbox("Plot Style", ["Heatmap", "Contour"], index=1)
+        # Slider for leverage
+        leverage = st.slider(
+            "Exposure to the Market (Leverage) [%]",
+            min_value=0.0,
+            max_value=1000.0,
+            value=lev_r * 100,
+            step=10.0,
+        )
+        # Slider for TER
+        ter = st.slider(
+            "TER of the ETF [%]", min_value=0.0, max_value=2.0, value=exp_r, step=0.05
+        )
+        # Slider for LIBOR
+        libor = st.slider(
+            "LIBOR rate [%]", min_value=0.0, max_value=4.0, value=libor, step=0.1
+        )
+        # Placeholder for the graph
+        st.plotly_chart(
+            update_plot(data_source, leverage, ter, libor), use_container_width=True
+        )
+
+        # Header for the Kelly Criterion plot
+        st.markdown("", unsafe_allow_html=True)
+        st.write("## Ideal Market Exposure (Leverage) According to the Kelly Criterion")
+        st.markdown(
+            """
+            In contrast to the previous figure, the ideal leverage factor, which 
+            is determined by the Kelly criterion, shows an even stronger dependence 
+            on volatility and thus an even smaller margin of error. This is due 
+            to the fact that the Kelly criterion maximizes the expected geometric 
+            growth rate, thus avoiding the 
+            ['Just One More Paradox'](https://www.youtube.com/watch?v=_FuuYSM7yOo&), 
+            which describes the phenomenon of a median loss even though the expected 
+            value of every bet and thus the overall expected value (mean) is positive.
+            """,
+            unsafe_allow_html=True,
+        )
+        # Dropdown for the plot style
+        data_source_kelly = st.selectbox(
+            "Plot Style", ["Heatmap", "Contour"], index=1, key="kelly"
+        )
+        # Slider for the risk free rate
+        risk_free_rate = st.slider(
+            "Risk Free Yearly Return [%] (Costs)",
+            min_value=0.0,
+            max_value=8.0,
+            value=3.0,
+            step=0.25,
+        )
+        # Placeholder for the graph
+        st.plotly_chart(
+            update_kelly_plot(data_source_kelly, risk_free_rate), use_container_width=True
+        )
         
-        Further Reading:
-        <p id="footnote-1">[1] E. Thorp, <a href=
-        "https://www.eecs.harvard.edu/cs286r/courses/fall12/papers/Thorpe_KellyCriterion2007.pdf">
-        THE KELLY CRITERION IN BLACKJACK SPORTS BETTING, AND THE STOCK MARKET</a>, 
-        Chapter 9, Handbook of Asset and Liability Management.</p>
-        
-        For the practical part, here are some common ticker symbols:<br>
-        - ^GSPC: S&P 500 Index<br>
-        - ^NDX: Nasdaq 100 Index<br>
-        - AAPL: Apple Inc.<br>
-        - MSFT: Microsoft Corporation<br>
-        - NVDA: NVIDIA Corporation<br>
-        - ^GDAXI: DAX40 Index<br>
-        - ^STOXX50E: EURO STOXX 50 Index<br>
-        - ^STOXX: STOXX Europe 600 Index<br>
-        - ^N225: Nikkei 225 Index<br>
-        - SPY: SPDR S&P 500 ETF<br>
-        - SJIM: Inverse Cramer ETF\n
-        
-        For a list of all available ticker symbols, please visit 
-        https://finance.yahoo.com/lookup or https://finance.yahoo.com/most-active/
-        """,
-        unsafe_allow_html=True,
-    )
-    # Ticker string input
-    ticker_symbol = st.text_input("Ticker Symbol", value="^GSPC")
-    # Slider for the risk free rate
-    risk_free_rate_ticker = st.slider(
-        "Risk Free Yearly Return [%] (Costs)",
-        min_value=0.0,
-        max_value=8.0,
-        value=3.0,
-        step=0.25,
-        key="ticker",
-    )
-    st.plotly_chart(
-        update_ticker_plot(ticker_symbol, risk_free_rate_ticker),
-        use_container_width=True,
-    )
-    # Slider for the leverage of the derivatives
-    derivative_leverage = st.slider(
-        "Leverage of the Derivatives",
-        min_value=0.0,
-        max_value=10.0,
-        value=3.0,
-        step=0.25,
-    )
-    # Slider for the expenses of the derivatives
-    derivative_expenses = st.slider(
-        "Yearly Expense Ratio of the Derivatives [%]",
-        min_value=0.0,
-        max_value=5.0,
-        value=3.0,
-        step=0.25,
-    )
-    # Slider for the transaction costs of the derivatives
-    rel_transact_costs = st.slider(
-        "Transaction Costs for Buying and Selling Separately [%]",
-        min_value=0.0,
-        max_value=5.0,
-        value=3.0,
-        step=0.25,
-    )
-    # Slider for the Kelly leverage time window
-    look_back_window = st.slider(
-        "Kelly Leverage Look-Back Window [Trading Days]",
-        min_value=10,
-        max_value=100,
-        value=60,
-        step=10,
-        format="%d",
-    )
-    # Slider for the holding period of the derivatives
-    holding_period = st.slider(
-        "Holding Period of the Derivatives [Trading Days]",
-        min_value=5,
-        max_value=50,
-        value=15,
-        step=5,
-        format="%d",
-    )
-    st.plotly_chart(
-        update_derivatives_performance_plot(
-            ticker_symbol,
-            risk_free_rate_ticker,
-            derivative_leverage,
-            derivative_expenses,
-            rel_transact_costs,
-            look_back_window,
-            holding_period,
-        ),
-        use_container_width=True,
-    )
+    with tab2:
+        # Header for the ticker price data plot
+        st.markdown("", unsafe_allow_html=True)
+        st.write("## What Does All This Imply for My Investments?")
+        st.markdown(
+            """
+            Depending on whether you want to pursue a maximally aggressive Kelly strategy 
+            or whether you are aiming for an annualized volatility of 20%, for example, 
+            you can find suggestions below in view of current stock market prices as well 
+            as forecasts for the percentage-at-risk (PaR) at empirical 1% and 5% levels 
+            based on the data of the last 2 years (if available) in order to put the Kelly 
+            suggestions into perspective.\n
+            Keep in mind that an overestimation of returns and and an underestimation of
+            volatility can lead to an inflated allocation fraction and thus a significant 
+            loss of capital <a href="#footnote-1">[1]</a>. The Kelly Criterion is a 
+            powerful tool, but it is not a guarantee for success. It is important to use 
+            it in conjunction with other risk management strategies and to be aware of the 
+            limitations of the model and its assumptions.\n
+            
+            Further Reading:
+            <p id="footnote-1">[1] E. Thorp, <a href=
+            "https://www.eecs.harvard.edu/cs286r/courses/fall12/papers/Thorpe_KellyCriterion2007.pdf">
+            THE KELLY CRITERION IN BLACKJACK SPORTS BETTING, AND THE STOCK MARKET</a>, 
+            Chapter 9, Handbook of Asset and Liability Management.</p>
+            
+            For the practical part, here are some common ticker symbols:<br>
+            - ^GSPC: S&P 500 Index<br>
+            - ^NDX: Nasdaq 100 Index<br>
+            - AAPL: Apple Inc.<br>
+            - MSFT: Microsoft Corporation<br>
+            - NVDA: NVIDIA Corporation<br>
+            - ^GDAXI: DAX40 Index<br>
+            - ^STOXX50E: EURO STOXX 50 Index<br>
+            - ^STOXX: STOXX Europe 600 Index<br>
+            - ^N225: Nikkei 225 Index<br>
+            - SPY: SPDR S&P 500 ETF<br>
+            - SJIM: Inverse Cramer ETF\n
+            
+            For a list of all available ticker symbols, please visit 
+            https://finance.yahoo.com/lookup or https://finance.yahoo.com/most-active/
+            """,
+            unsafe_allow_html=True,
+        )
+        # Ticker string input
+        ticker_symbol = st.text_input("Ticker Symbol", value="^GSPC")
+        # Slider for the risk free rate
+        risk_free_rate_ticker = st.slider(
+            "Risk Free Yearly Return [%] (Costs)",
+            min_value=0.0,
+            max_value=8.0,
+            value=3.0,
+            step=0.25,
+            key="ticker",
+        )
+        st.plotly_chart(
+            update_ticker_plot(ticker_symbol, risk_free_rate_ticker),
+            use_container_width=True,
+        )
+        # Slider for the leverage of the derivatives
+        derivative_leverage = st.slider(
+            "Leverage of the Derivatives",
+            min_value=0.0,
+            max_value=10.0,
+            value=3.0,
+            step=0.25,
+        )
+        # Slider for the expenses of the derivatives
+        derivative_expenses = st.slider(
+            "Yearly Expense Ratio of the Derivatives [%]",
+            min_value=0.0,
+            max_value=5.0,
+            value=3.0,
+            step=0.25,
+        )
+        # Slider for the transaction costs of the derivatives
+        rel_transact_costs = st.slider(
+            "Transaction Costs for Buying and Selling Separately [%]",
+            min_value=0.0,
+            max_value=5.0,
+            value=3.0,
+            step=0.25,
+        )
+        # Slider for the Kelly leverage time window
+        look_back_window = st.slider(
+            "Kelly Leverage Look-Back Window [Trading Days]",
+            min_value=10,
+            max_value=100,
+            value=60,
+            step=10,
+            format="%d",
+        )
+        # Slider for the holding period of the derivatives
+        holding_period = st.slider(
+            "Holding Period of the Derivatives [Trading Days]",
+            min_value=5,
+            max_value=50,
+            value=15,
+            step=5,
+            format="%d",
+        )
+        st.plotly_chart(
+            update_derivatives_performance_plot(
+                ticker_symbol,
+                risk_free_rate_ticker,
+                derivative_leverage,
+                derivative_expenses,
+                rel_transact_costs,
+                look_back_window,
+                holding_period,
+            ),
+            use_container_width=True,
+        )
+
+    with tab3:
+        # Header for the Stock Screener
+        st.markdown("", unsafe_allow_html=True)
+        st.write("## Work in Progress")
