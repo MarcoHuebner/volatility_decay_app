@@ -357,6 +357,7 @@ def update_derivatives_performance_plot(
     expenses: float,
     rel_transact_costs: float,
     time_window: int,
+    holding_period: int,
 ) -> go.Figure:
     # create the plotly figure
     fig = go.Figure()
@@ -374,22 +375,22 @@ def update_derivatives_performance_plot(
     pct_change = result_dict["price"].pct_change()
 
     # how have derivatives bought with kelly criterion > 5 performed in the past?
-    # show results of 15 day intervals
+    # show results of holding_period day intervals
     kelly_crit = kelly_leverage(
         pct_change, risk_free_rate_ticker, time_window=time_window
     ).tail(252)
     pct_change = pct_change.tail(252)
     # get days on which the kelly criterion was > 5
     dates_iloc = np.where(kelly_crit > 5)[0]
-    # dates_iloc = dates_iloc[dates_iloc < (252 - 15)]
-    # get all possible 15 day interval returns
+    # get all possible holding_period day interval returns
     returns_1x = [
-        performance_cumprod(pct_change.iloc[date : date + 15]) for date in dates_iloc
+        performance_cumprod(pct_change.iloc[date : date + holding_period])
+        for date in dates_iloc
     ]
     returns_lev = [
         performance_cumprod(
             simplified_lev_factor(
-                pct_change.iloc[date : date + 15],
+                pct_change.iloc[date : date + holding_period],
                 expenses,
                 rel_transact_costs,
                 leverage,
@@ -400,7 +401,10 @@ def update_derivatives_performance_plot(
     returns_ko = [
         performance_cumprod(
             simplified_knockout(
-                price.iloc[date : date + 15], expenses, rel_transact_costs, leverage
+                price.iloc[date : date + holding_period],
+                expenses,
+                rel_transact_costs,
+                leverage,
             )
         )
         for date in dates_iloc
@@ -473,14 +477,14 @@ def update_derivatives_performance_plot(
             dash="dash",
         ),
     )
-    # add last 15 day cut-off line
+    # add last holding_period day cut-off line
     fig.add_shape(
         type="line",
         xref="x",
         yref="y2",
-        x0=price.index[-15],
+        x0=price.index[-holding_period],
         y0=min(min(returns_1x), min(returns_lev), min(returns_ko)),
-        x1=price.index[-15],
+        x1=price.index[-holding_period],
         y1=max(max(returns_1x), max(returns_lev), max(returns_ko)),
         line=dict(
             color=st_darker_blue,
@@ -527,7 +531,7 @@ def update_derivatives_performance_plot(
             title="Closing Prices", title_font=dict(color=st_blue), hoverformat=".2f"
         ),
         yaxis2=dict(
-            title="Returns @ Buy Date + 15 Days [%]",
+            title=f"Returns @ Buy Date + {holding_period} Days [%]",
             side="right",
             overlaying="y",
             title_font=dict(color=st_dark_blue),
@@ -762,6 +766,15 @@ if __name__ == "__main__":
         step=10,
         format="%d",
     )
+    # Slider for the holding period of the derivatives
+    holding_period = st.slider(
+        "Holding Period of the Derivatives [Trading Days]",
+        min_value=5,
+        max_value=50,
+        value=15,
+        step=5,
+        format="%d",
+    )
     st.plotly_chart(
         update_derivatives_performance_plot(
             ticker_symbol,
@@ -770,6 +783,7 @@ if __name__ == "__main__":
             derivative_expenses,
             rel_transact_costs,
             look_back_window,
+            holding_period,
         ),
         use_container_width=True,
     )
