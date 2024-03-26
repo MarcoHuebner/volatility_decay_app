@@ -111,7 +111,7 @@ def simplified_lev_factor(
     :return: pd.Series, daily returns of the factor with leverage
     """
     daily_returns = daily_returns * leverage + gmean(-expense_ratio / percent)
-    
+
     # simplify: Assume the costs consist of only volume depend costs, neglecting fixed costs
     daily_returns.iloc[0] -= rel_transact_costs / percent
     daily_returns.iloc[-1] -= rel_transact_costs / percent
@@ -321,3 +321,29 @@ def empirical_var(data: pd.Series, alpha: float) -> float:
 
     # Calculate the VaR
     return np.quantile(daily_returns, alpha)
+
+
+# define the helper functions
+def xaxis_slider():
+    """
+    Create a slider for the x-axis of the plotly graph.
+
+    :return: dict, slider for the x-axis
+    """
+    xaxis_with_slider = dict(
+        rangeselector=dict(
+            buttons=list(
+                [
+                    dict(count=1, label="1m", step="month", stepmode="backward"),
+                    dict(count=6, label="6m", step="month", stepmode="backward"),
+                    dict(count=1, label="YTD", step="year", stepmode="todate"),
+                    dict(count=1, label="1y", step="year", stepmode="backward"),
+                    dict(step="all"),
+                ]
+            )
+        ),
+        rangeslider=dict(visible=True),
+        type="date",
+    )
+
+    return xaxis_with_slider

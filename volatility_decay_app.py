@@ -29,6 +29,7 @@ from utils import (
     performance_cumprod,
     simplified_knockout,
     simplified_lev_factor,
+    xaxis_slider,
 )
 
 
@@ -314,11 +315,11 @@ def update_ticker_plot(ticker: str, risk_free_rate_ticker: float) -> go.Figure:
 
     # update layout
     fig.update_layout(
-        title=f"<span style='font-size: 24px;'>Current Price and Volatility of {result_dict['name']}</span><br>"
-        + "<span style='font-size: 4px;'></span><br>"
-        + f"<span style='font-size: 16px;'>Kelly Leverage Factor: {kelly:.2f}\
-    -   Leverage @20% Volatility: {lev_20:.2f}\
-    -   Current 1%/5% PaR (last 2y): {par_1:.2f}%/{par_5:.2f}%</span>",
+        title=f"<span style='font-size: 24px;'>Current Price and"
+        + f"Volatility of {result_dict['name']}</span><br>"
+        + f"<span style='font-size: 16px;'>Kelly Leverage Factor: {kelly:.2f}"
+        + f" - Leverage @20% Volatility: {lev_20:.2f}"
+        + f" - Current 1%/5% PaR (last 2y): {par_1:.2f}%/{par_5:.2f}%</span>",
         hovermode="x unified",
         yaxis=dict(
             title="Closing Prices", title_font=dict(color=st_blue), hoverformat=".2f"
@@ -338,17 +339,10 @@ def update_ticker_plot(ticker: str, risk_free_rate_ticker: float) -> go.Figure:
             title_font=dict(color=st_green),
             hoverformat=".2f",
         ),
+        xaxis=xaxis_slider(),
     )
-    # set x-ticks
-    num_ticks = 10
-    tickids = np.linspace(
-        0, min(252, len(result_dict["price"])) - 1, num_ticks, endpoint=True, dtype=int
-    )
-    tickvals = [result_dict["price"].iloc[-252:].index[id] for id in tickids]
-    ticktext = [val.strftime("%Y-%m-%d") for val in tickvals]
+    # update x width
     fig.update_xaxes(
-        tickvals=tickvals,
-        ticktext=ticktext,
         domain=[0.0, 0.89],
     )
 
@@ -523,10 +517,11 @@ def update_derivatives_performance_plot(
 
     # update layout
     fig.update_layout(
-        title=f"<span style='font-size: 24px;'>How Derivatives of {result_dict['name']} Performed</span><br>"
-        + "<span style='font-size: 4px;'></span><br>"
-        + f"<span style='font-size: 16px;'>Given a 60-day Rolling Kelly Leverage Factor as Signal\
-    -   Amount of Signals in the Past 252 Trading Days: {len(dates_iloc)}</span>",
+        title="<span style='font-size: 24px;'>How Derivatives of "
+        + f"{result_dict['name']} Performed</span><br>"
+        + "<span style='font-size: 16px;'>Given a 60-day Rolling Kelly "
+        + "Leverage Factor as Signal - Amount of Signals in the Past 252 "
+        + f"Trading Days: {len(dates_iloc)}</span>",
         hovermode="x unified",
         yaxis=dict(
             title="Closing Prices", title_font=dict(color=st_blue), hoverformat=".2f"
@@ -546,17 +541,10 @@ def update_derivatives_performance_plot(
             title_font=dict(color=st_red),
             hoverformat=".2f",
         ),
+        xaxis=xaxis_slider(),
     )
-    # set x-ticks
-    num_ticks = 10
-    tickids = np.linspace(
-        0, min(252, len(price)) - 1, num_ticks, endpoint=True, dtype=int
-    )
-    tickvals = [price.index[id] for id in tickids]
-    ticktext = [val.strftime("%Y-%m-%d") for val in tickvals]
+    # update x width
     fig.update_xaxes(
-        tickvals=tickvals,
-        ticktext=ticktext,
         domain=[0.0, 0.89],
     )
 
