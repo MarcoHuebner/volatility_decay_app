@@ -240,7 +240,7 @@ def update_ticker_plot(ticker: str, risk_free_rate_ticker: float) -> go.Figure:
             line=dict(color=st_darker_blue, dash="dot"),
         )
     )
-    # add volatility
+    # add annualized volatility
     fig.add_trace(
         go.Scatter(
             x=result_dict["ann_volatility"].index,
@@ -251,13 +251,13 @@ def update_ticker_plot(ticker: str, risk_free_rate_ticker: float) -> go.Figure:
             line=dict(color=st_red),
         )
     )
-    # add daily volatility
+    # add 30-d volatility (VIX for S&P)
     fig.add_trace(
         go.Scatter(
-            x=result_dict["volatility"].index,
-            y=result_dict["volatility"],
+            x=result_dict["30_d_volatility_vix"].index,
+            y=result_dict["30_d_volatility_vix"],
             mode="lines",
-            name="Daily Volatility Estimate",
+            name="30 Day Volatility Estimate",
             yaxis="y2",
             visible="legendonly",
             line=dict(color=st_red, dash="dot"),
@@ -292,7 +292,7 @@ def update_ticker_plot(ticker: str, risk_free_rate_ticker: float) -> go.Figure:
     )
 
     # calculate the Kelly Criterion with maximum of the three volatilities
-    average_vol_30d = result_dict["volatility"].iloc[-52:].mean()
+    average_vol_30d = result_dict["30_d_volatility_vix"].iloc[-52:].mean()
     average_daily_return = pct_change.iloc[-252:].mean()
     max_vol = max(
         result_dict["ann_volatility"].iloc[-1],

@@ -219,8 +219,6 @@ def fetch_ticker_data(ticker: str) -> dict[str, Union[str, pd.Series]]:
 
     # Pick the relevant data
     data = lazy_dict.history(period="2y", interval="1d", auto_adjust=True)["Close"]
-    data_high = lazy_dict.history(period="1y", interval="1d", auto_adjust=True)["High"]
-    data_low = lazy_dict.history(period="1y", interval="1d", auto_adjust=True)["Low"]
     if data.empty:
         raise ValueError(f"Ticker {ticker} not found. Please check the ticker symbol.")
     else:
@@ -231,12 +229,16 @@ def fetch_ticker_data(ticker: str) -> dict[str, Union[str, pd.Series]]:
         ma200 = data.rolling(window=200).mean().dropna()
         # Get the full name of the ticker symbol
         name = lazy_dict.info["longName"]
+        # Compute the 30-day volatility (VIX for S&P)
+        vix = empirical_annualized_volatility(data, window=30)
+        # Compute the annualized volatility
+        ann_vol = empirical_annualized_volatility(data)
         # Create a dictionary with the last year of (trading days) data (except for price)
         result_dict = {
             "name": name,
             "price": data,
-            "volatility": estimated_annualized_volatility(data_high, data_low),
-            "ann_volatility": empirical_annualized_volatility(data),
+            "ann_volatility": ann_vol.loc[starting_date_1y:],
+            "30_d_volatility_vix": vix.loc[starting_date_1y:],
             # "garch_volatility": garch_estimated_volatility(data),
             "ma50": ma50.loc[starting_date_1y:],
             "ma200": ma200.loc[starting_date_1y:],
@@ -260,15 +262,16 @@ def estimated_annualized_volatility(data_high: pd.Series, data_low: pd.Series) -
     return daily_volatility * np.sqrt(252) * 100
 
 
-def empirical_annualized_volatility(data: pd.Series) -> float:
+def empirical_annualized_volatility(data: pd.Series, window: int = 252) -> float:
     """
     Calculate the annualized volatility for every day in the stock data.
 
     :param data: pd.Series, price data
+    :param window: int, window size for the rolling standard deviation
     :return: float, annualized volatility in percent
     """
     # Calculate the volatility
-    volatility = data.pct_change().rolling(window=252).std().dropna()
+    volatility = data.pct_change().rolling(window=window).std().dropna()
 
     # Convert to annualized volatility in percent
     return volatility * np.sqrt(252) * 100
