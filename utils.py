@@ -234,6 +234,11 @@ def fetch_ticker_data(ticker: str) -> dict[str, str | pd.Series | pd.DataFrame]:
         vix = empirical_annualized_volatility(data, window=30)
         # Compute the annualized volatility
         ann_vol = empirical_annualized_volatility(data)
+        # Get the earnings dates, force them None if KeyError occurs
+        try:
+            earnings_dates = lazy_dict.get_earnings_dates()
+        except KeyError:
+            earnings_dates = None
         # Create a dictionary with the last year of (trading days) data (except for price)
         result_dict = {
             "name": name,
@@ -243,7 +248,7 @@ def fetch_ticker_data(ticker: str) -> dict[str, str | pd.Series | pd.DataFrame]:
             # "garch_volatility": garch_estimated_volatility(data),
             "ma50": ma50.loc[starting_date_1y:],
             "ma200": ma200.loc[starting_date_1y:],
-            "earnings": lazy_dict.get_earnings_dates(),
+            "earnings": earnings_dates,
         }
         return result_dict
 
