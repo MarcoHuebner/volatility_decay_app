@@ -99,6 +99,7 @@ def simplified_lev_factor(
     daily_returns: pd.Series,
     expense_ratio: float,
     rel_transact_costs: float,
+    hold_period: int,
     leverage: float = 1.0,
     percent: float = 100.0,
 ):
@@ -108,15 +109,18 @@ def simplified_lev_factor(
     :param daily_returns: pd.Series, daily returns of the underlying asset
     :param expense_ratio: float, expense ratio of the factor (in percent)
     :param rel_transact_costs: float, cost ratio assumed for each buy and sell transaction (in percent)
+    :param hold_period: int, number of days the factor should be held
     :param leverage: float | pd.Series, leverage of the factor
     :param percent: float, percentage factor used for expense ratio conversion
     :return: pd.Series, daily returns of the factor with leverage
     """
     daily_returns = daily_returns * leverage + gmean(-expense_ratio / percent)
 
-    # simplify: Assume the costs consist of only volume depend costs, neglecting fixed costs
+    # simplify: Assume the costs consist of only volume dependend costs, neglecting fixed costs
     daily_returns.iloc[0] -= rel_transact_costs / percent
-    daily_returns.iloc[-1] -= rel_transact_costs / percent
+    # subtract selling if the holding period is reached
+    if len(daily_returns) >= hold_period:
+        daily_returns.iloc[-1] -= rel_transact_costs / percent
 
     return daily_returns
 
@@ -125,6 +129,7 @@ def simplified_knockout(
     price: pd.Series,
     expense_ratio: float,
     rel_transact_costs: float,
+    hold_period: int,
     initial_leverage: float,
     percent: float = 100,
 ) -> pd.Series:
@@ -136,6 +141,7 @@ def simplified_knockout(
     :param price: pd.Series, price of the underlying asset
     :param expense_ratio: float, expense ratio of the knockout product (in percent)
     :param rel_transact_costs: float, cost ratio assumed for each buy and sell transaction (in percent)
+    :param hold_period: int, number of days the knockout product should be held
     :param initial_leverage: float, initial leverage factor of the knockout product
     :param percent: float, percentage factor used for expense ratio conversion
     :return: pd.Series, daily returns of the knockout product
@@ -145,7 +151,7 @@ def simplified_knockout(
         price.iloc[0] * (1 - (1 / initial_leverage)) * (1 - expense_ratio / percent)
     )
     # compute daily returns
-    pct_change = (price - ko_val).pct_change()
+    pct_change = (price - ko_val).pct_change().dropna()
 
     # get first knockout event (if it exists)
     mask = price.le(ko_val)
@@ -157,11 +163,13 @@ def simplified_knockout(
     else:
         pass
 
-    # simplify: Assume the costs consist of only volume depend costs, neglecting fixed costs
+    # simplify: Assume the costs consist of only volume dependent costs, neglecting fixed costs
     pct_change.iloc[0] -= rel_transact_costs / percent
-    pct_change.iloc[-1] -= rel_transact_costs / percent
+    # subtract selling if the holding period is reached
+    if len(pct_change) >= hold_period:
+        pct_change.iloc[-1] -= rel_transact_costs / percent
 
-    return pct_change.fillna(0)
+    return pct_change
 
 
 def kelly_leverage(

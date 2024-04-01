@@ -408,6 +408,7 @@ def update_derivatives_performance_plot(
                     pct_change.iloc[date : date + holding_period],
                     expenses,
                     rel_transact_costs,
+                    holding_period,
                     leverage,
                 )
             )
@@ -415,10 +416,13 @@ def update_derivatives_performance_plot(
         ]
         returns_ko = [
             performance_cumprod(
+                # assume that the knockout is bought during the day for
+                # the closing price of the previous day
                 simplified_knockout(
-                    price.iloc[date : date + holding_period],
+                    price.iloc[date - 1 : date + holding_period],
                     expenses,
                     rel_transact_costs,
+                    holding_period,
                     leverage,
                 )
             )
