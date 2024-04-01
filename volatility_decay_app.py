@@ -396,6 +396,8 @@ def update_derivatives_performance_plot(
     if dates_iloc.size == 0:
         # set to 0 if no signals
         returns_1x, returns_lev, returns_ko = [0], [0], [0]
+        win_ratio_ko, win_ratio_f = 0, 0
+        reward_ko, reward_f = 0, 0
     else:
         # get all possible holding_period day interval returns
         returns_1x = [
@@ -428,6 +430,20 @@ def update_derivatives_performance_plot(
             )
             for date in dates_iloc
         ]
+        # Pre-compute quantities to simplify the code
+        pos_returns_ko = [r for r in returns_ko if r > 0]
+        avg_win_ko = sum(pos_returns_ko) / len(pos_returns_ko)
+        neg_returns_ko = [r for r in returns_ko if r <= 0]
+        avg_loss_ko = sum(neg_returns_ko) / len(neg_returns_ko)
+        pos_returns_f = [r for r in returns_lev if r > 0]
+        avg_win_f = sum(pos_returns_f) / len(pos_returns_f)
+        neg_returns_f = [r for r in returns_lev if r <= 0]
+        avg_loss_f = sum(neg_returns_f) / len(neg_returns_f)
+        # Calculate win ratios and reward ratios
+        win_ratio_ko = len(pos_returns_ko) / len(returns_ko) * 100
+        win_ratio_f = len(pos_returns_f) / len(returns_lev) * 100
+        reward_ko = avg_win_ko / abs(avg_loss_ko)
+        reward_f = avg_win_f / abs(avg_loss_f)
     # Calculate opacities based on comparison of returns
     opacities_lev = [
         0.3 if lev <= ko else 1.0 for lev, ko in zip(returns_lev, returns_ko)
@@ -574,7 +590,7 @@ def update_derivatives_performance_plot(
         domain=[0.0, 0.89],
     )
 
-    return fig
+    return fig, win_ratio_ko, win_ratio_f, reward_ko, reward_f
 
 
 if __name__ == "__main__":
@@ -763,14 +779,6 @@ if __name__ == "__main__":
             update_ticker_plot(ticker_symbol, risk_free_rate_ticker),
             use_container_width=True,
         )
-        # Slider for the leverage of the derivatives
-        derivative_leverage = st.slider(
-            "Leverage of the Derivatives",
-            min_value=0.0,
-            max_value=10.0,
-            value=3.0,
-            step=0.25,
-        )
         # Slider for the expenses of the derivatives
         derivative_expenses = st.slider(
             "Yearly Expense Ratio of the Derivatives [%]",
@@ -781,7 +789,7 @@ if __name__ == "__main__":
         )
         # Slider for the transaction costs of the derivatives
         rel_transact_costs = st.slider(
-            "Transaction Costs for Buying and Selling Separately [%]",
+            "Transaction Costs for Buying and Selling (Separately) [%]",
             min_value=0.0,
             max_value=5.0,
             value=3.0,
@@ -805,16 +813,38 @@ if __name__ == "__main__":
             step=5,
             format="%d",
         )
+        # Slider for the leverage of the derivatives
+        derivative_leverage = st.slider(
+            "Leverage of the Derivatives",
+            min_value=0.0,
+            max_value=10.0,
+            value=3.0,
+            step=0.25,
+        )
+        (
+            derivates_fig,
+            win_ratio_ko,
+            win_ratio_f,
+            reward_ko,
+            reward_f,
+        ) = update_derivatives_performance_plot(
+            ticker_symbol,
+            risk_free_rate_ticker,
+            derivative_leverage,
+            derivative_expenses,
+            rel_transact_costs,
+            look_back_window,
+            holding_period,
+        )
+        st.write(
+            f"Win ratio over the past {holding_period} trading days"
+            + f" (KO / Factor): {win_ratio_ko:.1f}%/ {win_ratio_f:.1f}%."
+            + " Average risk (loss) vs. average reward (win) per trade"
+            + f" over the past {holding_period} trading days (KO/ Factor):"
+            + f" 1:{reward_ko:.2f}/ 1:{reward_f:.2f}"
+        )
         st.plotly_chart(
-            update_derivatives_performance_plot(
-                ticker_symbol,
-                risk_free_rate_ticker,
-                derivative_leverage,
-                derivative_expenses,
-                rel_transact_costs,
-                look_back_window,
-                holding_period,
-            ),
+            derivates_fig,
             use_container_width=True,
         )
 
