@@ -393,33 +393,37 @@ def update_derivatives_performance_plot(
     pct_change = pct_change.tail(252)
     # get days on which the kelly criterion was > 5
     dates_iloc = np.where(kelly_crit > 5)[0]
-    # get all possible holding_period day interval returns
-    returns_1x = [
-        performance_cumprod(pct_change.iloc[date : date + holding_period])
-        for date in dates_iloc
-    ]
-    returns_lev = [
-        performance_cumprod(
-            simplified_lev_factor(
-                pct_change.iloc[date : date + holding_period],
-                expenses,
-                rel_transact_costs,
-                leverage,
+    if dates_iloc.size == 0:
+        # set to 0 if no signals
+        returns_1x, returns_lev, returns_ko = [0], [0], [0]
+    else:
+        # get all possible holding_period day interval returns
+        returns_1x = [
+            performance_cumprod(pct_change.iloc[date : date + holding_period])
+            for date in dates_iloc
+        ]
+        returns_lev = [
+            performance_cumprod(
+                simplified_lev_factor(
+                    pct_change.iloc[date : date + holding_period],
+                    expenses,
+                    rel_transact_costs,
+                    leverage,
+                )
             )
-        )
-        for date in dates_iloc
-    ]
-    returns_ko = [
-        performance_cumprod(
-            simplified_knockout(
-                price.iloc[date : date + holding_period],
-                expenses,
-                rel_transact_costs,
-                leverage,
+            for date in dates_iloc
+        ]
+        returns_ko = [
+            performance_cumprod(
+                simplified_knockout(
+                    price.iloc[date : date + holding_period],
+                    expenses,
+                    rel_transact_costs,
+                    leverage,
+                )
             )
-        )
-        for date in dates_iloc
-    ]
+            for date in dates_iloc
+        ]
     # Calculate opacities based on comparison of returns
     opacities_lev = [
         0.3 if lev <= ko else 1.0 for lev, ko in zip(returns_lev, returns_ko)
