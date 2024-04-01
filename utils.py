@@ -301,6 +301,69 @@ def empirical_var(data: pd.Series, alpha: float) -> float:
     return np.quantile(daily_returns, alpha)
 
 
+# define yfinance functions
+@st.cache_data(ttl=3600, show_spinner=False)  # cache for 1 hour
+def fetch_ticker_data(ticker: str) -> dict[str, None | str | pd.Series | pd.DataFrame]:
+    """
+    Fetch the stock data from Yahoo Finance API via yfinance and calculate the
+    50-day and 200-day moving average (MA).
+
+    :param ticker: str, ticker symbol of the stock
+    :return: dict, contains name, stock closing price, ann. vol., 30-day vol.,
+                   50-day MA, 200-day MA, earnings dates (if available)
+    """
+    # Fetch the stock price data from Yahoo Finance API via yfinance
+    lazy_dict = yfinance.Ticker(ticker)
+
+    # Pick the relevant data
+    data = lazy_dict.history(period="2y", interval="1d", auto_adjust=True)["Close"]
+    if data.empty:
+        raise ValueError(f"Ticker {ticker} not found. Please check the ticker symbol.")
+    else:
+        # Slice the data to the one and two years, to reduce computation time
+        starting_date_1y = data.index[-252]
+        # Calculate the moving averages
+        ma50 = data.rolling(window=50).mean().dropna()
+        ma200 = data.rolling(window=200).mean().dropna()
+        # Get the full name of the ticker symbol
+        name = lazy_dict.info["longName"]
+        # Compute the 30-day volatility (VIX for S&P)
+        vix = empirical_annualized_volatility(data, window=30)
+        # Compute the annualized volatility
+        ann_vol = empirical_annualized_volatility(data)
+        # Get the earnings dates, force them None if KeyError occurs
+        try:
+            earnings_dates = lazy_dict.get_earnings_dates()
+        except KeyError:
+            earnings_dates = None
+        # Create a dictionary with the last year of (trading days) data (except for price)
+        result_dict = {
+            "name": name,
+            "price": data,
+            "ann_volatility": ann_vol.loc[starting_date_1y:],
+            "30_d_volatility_vix": vix.loc[starting_date_1y:],
+            # "garch_volatility": garch_estimated_volatility(data),
+            "ma50": ma50.loc[starting_date_1y:],
+            "ma200": ma200.loc[starting_date_1y:],
+            "earnings": earnings_dates,
+        }
+        return result_dict
+
+
+@st.cache_data(ttl=3600 * 23.75, show_spinner=False)  # cache for a day minus overlap
+def download_universe() -> pd.DataFrame:
+    # Opening and reading the symbols file (currently 1148 symbols, 172 unavailable)
+    symbols_list = open("assets/symbols_list.txt", "r")
+    symbols = symbols_list.read().split()
+    symbols_list.close()
+
+    # Download the data for all (available) symbols in the universe
+    # Takes about 3 minutes for around 1000 symbols
+    download = yfinance.download(symbols, period="3mo", interval="1d")
+
+    return download.dropna(axis=1)
+
+
 # define the helper functions
 def xaxis_slider(
     reference_data: pd.Series,
