@@ -19,13 +19,14 @@ ipywidgets>=7.0.0
 """
 
 import numpy as np
-import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
 from utils import (
+    download_universe,
     fetch_ticker_data,
     kelly_leverage,
+    kelly_stock_universe,
     leveraged_return_mesh,
     performance_cumprod,
     plot_earnings_dates,
@@ -324,10 +325,10 @@ def update_ticker_plot(ticker: str, risk_free_rate_ticker: float) -> go.Figure:
     # update layout
     fig.update_layout(
         title=f"<span style='font-size: 24px;'>Current Price and"
-        + f"Volatility of {result_dict['name']}</span><br>"
+        + f" Volatility of {result_dict['name']}</span><br>"
         + f"<span style='font-size: 16px;'>Kelly Leverage Factor: {kelly:.2f}"
         + f" - Leverage @20% Volatility: {lev_20:.2f}"
-        + f" - Current 1%/5% PaR (last 2y): {par_1:.2f}%/{par_5:.2f}%</span>",
+        + f" - Current 1%/5% PaR (past 2y): {par_1:.2f}%/{par_5:.2f}%</span>",
         hovermode="x unified",
         yaxis=dict(
             title="Closing Prices", title_font=dict(color=st_blue), hoverformat=".2f"
@@ -515,7 +516,7 @@ def update_derivatives_performance_plot(
             dash="dash",
         ),
     )
-    # add last holding_period day cut-off line
+    # add past holding_period day cut-off line
     fig.add_shape(
         type="line",
         xref="x",
@@ -731,7 +732,7 @@ if __name__ == "__main__":
             or whether you are aiming for an annualized volatility of 20%, for example, 
             you can find suggestions below in view of current stock market prices as well 
             as forecasts for the percentage-at-risk (PaR) at empirical 1% and 5% levels 
-            based on the data of the last 2 years (if available) in order to put the Kelly 
+            based on the data of the past 2 years (if available) in order to put the Kelly 
             suggestions into perspective.\n
             Keep in mind that an overestimation of returns and and an underestimation of
             volatility can lead to an inflated allocation fraction and thus a significant 
@@ -851,4 +852,143 @@ if __name__ == "__main__":
     with tab3:
         # Header for the Stock Screener
         st.markdown("", unsafe_allow_html=True)
-        st.write("## Work in Progress")
+        st.write("## Stock Universe Screener (Work in Progress)")
+
+        # TODO: Display the failed download log
+        with st.spinner("Fetching data (might take up to 5 minutes)..."):
+            data = download_universe()
+
+        # Display the output in Streamlit
+        st.success("Data fetched successfully!")
+        # Filter data based on the "Volume" column
+        filter_by_volume = st.checkbox(
+            "Keep only Stocks with High Trading Volume", value=True
+        )
+        if filter_by_volume:
+            # Filter data based on the "Volume" column
+            sufficient_volume = (data["Volume"] < 1000000).all(axis=0) == False
+            # Remove columns with insufficient volume
+            filtered_cols = [
+                col
+                for i, col in enumerate(data["Volume"].columns)
+                if sufficient_volume.iloc[i] == True
+            ]
+        else:
+            # Keep all columns
+            filtered_cols = data["Volume"].columns
+
+        # Display the past 60 days of the adjusted close data
+        n_days = 60
+        adj_close_data = data.xs("Adj Close", level=0, axis=1).iloc[-(n_days + 1) :]
+        adj_close_data = adj_close_data[filtered_cols]
+        n_assets = adj_close_data.shape[1]
+        st.write(f"### Past {n_days} Days of Adjusted Close Data for {n_assets} Assets")
+        st.dataframe(data=adj_close_data.tail(10))
+
+        # Header for the stock universe indicators
+        st.write("## Indicators for the Stock Universe")
+        st.markdown(
+            """
+            ### Kelly Criterion \n
+            Filter for stocks with a low volatility compared to their past 60 day 
+            (30 day) returns and display the average daily range (ADR) of the 
+            corresponding stocks.
+            """
+        )
+
+        # Slider for the risk free rate
+        risk_free_rate_u = st.slider(
+            "Risk Free Yearly Return [%] (Costs)",
+            min_value=0.0,
+            max_value=8.0,
+            value=3.0,
+            step=0.25,
+            key="stock_universe",
+        )
+
+        # Calculate the Kelly leverage factor for the stock universe for the past n_days
+        leverage = kelly_stock_universe(adj_close_data, risk_free_rate_u, n_days)
+        # Apply filters to the leverage factor
+        leverage_gt_10 = leverage[leverage > 10]
+        largest_20 = leverage_gt_10.nlargest(20).round(2)
+        largest_20.name = "Kelly"
+        # Repeat for a different time window
+        leverage_30 = kelly_stock_universe(
+            adj_close_data.iloc[-(30 + 1) :], risk_free_rate_u, 30
+        )
+        largest_gt_10_30 = leverage_30[leverage_30 > 10]
+        largest_20_30 = leverage_30.nlargest(20).round(2)
+        largest_20_30.name = "Kelly"
+
+        # Calculate the average daily range for the stock universe
+        high_data = data.xs("High", level=0, axis=1).iloc[-n_days:]
+        high_data = high_data[filtered_cols]
+        low_data = data.xs("Low", level=0, axis=1).iloc[-n_days:]
+        low_data = low_data[filtered_cols]
+        # Calculate the average daily range for the past n_days
+        daily_range = (high_data / low_data).mean()
+        average_daily_range = (100 * (daily_range - 1)).round(2)[largest_20.index]
+        average_daily_range.name = "ADR [%]"
+        # Repeat for a different time window
+        daily_range_30 = (high_data.iloc[-30:] / low_data.iloc[-30:]).mean()
+        average_daily_range_30 = (100 * (daily_range_30 - 1)).round(2)[
+            largest_20_30.index
+        ]
+        average_daily_range_30.name = "ADR [%]"
+
+        # Create columns for the indicators
+        col1, col2, col3, col4 = st.columns(4)
+
+        # Use the columns for display
+        col1.write(
+            f"Kelly leverage factor > 10 in the past {n_days} days:"
+            f" {len(leverage_gt_10)} Stocks. Top 20:"
+        )
+        col1.dataframe(data=largest_20)
+        col2.write(
+            f"Kelly leverage factor > 10 in the past 30 days:"
+            f" {len(largest_gt_10_30)} Stocks. Top 20:"
+        )
+        col2.dataframe(data=largest_20_30)
+        col3.write(f"Average daily range [%] in the past {n_days} days:")
+        col3.dataframe(data=average_daily_range)
+        col4.write(f"Average daily range [%] in the past 30 days:")
+        col4.dataframe(data=average_daily_range_30)
+
+        st.markdown(
+            """
+            ### Average Daily Range \n
+            Filter for stocks with a high average daily range (ADR) in the past
+            60 days (30 days) and a positive trend.
+            """
+        )
+
+        # Filter for a positive trend in the past n_days
+        top_adr_returns = performance_cumprod(adj_close_data.pct_change()).round(2)
+        top_adr_returns.name = "Return [%]"
+        # Filter for the largest ADR in the past n_days with positive trend
+        top_adr_item = top_adr_returns.index[top_adr_returns > 10]
+        top_adr = (100 * (daily_range[top_adr_item] - 1)).nlargest(20).round(2)
+        top_adr.name = "ADR [%]"
+        # Repeat for a different time window
+        top_adr_30_returns = performance_cumprod(
+            adj_close_data.iloc[-31:].pct_change()
+        ).round(2)
+        top_adr_30_returns.name = "Return [%]"
+        # Filter for the largest ADR in the past 30 days with positive trend
+        top_adr_30_item = top_adr_30_returns.index[top_adr_30_returns > 5]
+        top_adr_30 = (100 * (daily_range_30[top_adr_30_item] - 1)).nlargest(20).round(2)
+        top_adr_30.name = "ADR [%]"
+
+        # Create columns for the indicators
+        col1, col2, col3, col4 = st.columns(4)
+
+        # Use the columns for display
+        col1.write(f"Top 20 ADR stocks in the past {n_days} days:")
+        col1.dataframe(data=top_adr)
+        col2.write("Top 20 ADR stocks in the past 30 days:")
+        col2.dataframe(data=top_adr_30)
+        col3.write(f"Return [%] past {n_days} days:")
+        col3.dataframe(data=top_adr_returns[top_adr.index])
+        col4.write(f"Return [%] in the past 30 days:")
+        col4.dataframe(data=top_adr_30_returns[top_adr_30.index])
