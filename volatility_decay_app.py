@@ -838,11 +838,10 @@ if __name__ == "__main__":
             holding_period,
         )
         st.write(
-            f"Win ratio over the past {holding_period} trading days"
-            + f" (KO / Factor): {win_ratio_ko:.1f}%/ {win_ratio_f:.1f}%."
-            + " Average risk (loss) vs. average reward (win) per trade"
-            + f" over the past {holding_period} trading days (KO/ Factor):"
-            + f" 1:{reward_ko:.2f}/ 1:{reward_f:.2f}"
+            "Win ratio over the past 252 trading days (KO / Factor):"
+            + f" {win_ratio_ko:.1f}%/ {win_ratio_f:.1f}%. Average risk (loss)"
+            + " vs. average reward (win) per trade over the past 252 trading"
+            + f" days (KO/ Factor): 1:{reward_ko:.2f}/ 1:{reward_f:.2f}"
         )
         st.plotly_chart(
             derivates_fig,
