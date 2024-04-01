@@ -85,12 +85,12 @@ def gmean(x: float, time_window: int = 1, days_in_year: int = 365):
     return (x + 1) ** (time_window / days_in_year) - 1
 
 
-def performance_cumprod(returns: pd.Series) -> float:
+def performance_cumprod(returns: pd.Series | pd.DataFrame) -> float | pd.Series:
     """
     Calculate the cumulative product of the returns.
 
-    :param returns: pd.Series, daily returns
-    :return: float, return on the last day in percent
+    :param returns: pd.Series | pd.DataFrame, daily returns
+    :return: float | pd.Series, return on the last day in percent
     """
     return ((1 + returns).cumprod().iloc[-1] - 1) * 100
 
@@ -204,53 +204,19 @@ def kelly_leverage(
     return leverage.fillna(1.0)
 
 
-# define yfinance functions
-@st.cache_data(ttl=3600, show_spinner=False)  # cache for 1 hour
-def fetch_ticker_data(ticker: str) -> dict[str, str | pd.Series | pd.DataFrame]:
-    """
-    Fetch the stock data from Yahoo Finance API via yfinance and calculate the
-    50-day and 200-day moving average (MA).
+def kelly_stock_universe(
+    data: pd.DataFrame, risk_free_rate: float, n_days: int
+) -> pd.DataFrame:
+    # Compute the Kelly criterion for the stock universe (simplified)
+    change = data.pct_change()
+    mean = change.mean() * n_days
+    std = change.std() * n_days**0.5
 
-    :param ticker: str, ticker symbol of the stock
-    :return: dict, contains name, stock closing price, ann. vol., 30-day vol.,
-                   50-day MA, 200-day MA, earnings dates (if available)
-    """
-    # Fetch the stock price data from Yahoo Finance API via yfinance
-    lazy_dict = yfinance.Ticker(ticker)
+    # get the risk-free rate for the time window
+    time_window_risk_free = gmean(risk_free_rate / 100, time_window=n_days)
 
-    # Pick the relevant data
-    data = lazy_dict.history(period="2y", interval="1d", auto_adjust=True)["Close"]
-    if data.empty:
-        raise ValueError(f"Ticker {ticker} not found. Please check the ticker symbol.")
-    else:
-        # Slice the data to the one and two years, to reduce computation time
-        starting_date_1y = data.index[-252]
-        # Calculate the moving averages
-        ma50 = data.rolling(window=50).mean().dropna()
-        ma200 = data.rolling(window=200).mean().dropna()
-        # Get the full name of the ticker symbol
-        name = lazy_dict.info["longName"]
-        # Compute the 30-day volatility (VIX for S&P)
-        vix = empirical_annualized_volatility(data, window=30)
-        # Compute the annualized volatility
-        ann_vol = empirical_annualized_volatility(data)
-        # Get the earnings dates, force them None if KeyError occurs
-        try:
-            earnings_dates = lazy_dict.get_earnings_dates()
-        except KeyError:
-            earnings_dates = None
-        # Create a dictionary with the last year of (trading days) data (except for price)
-        result_dict = {
-            "name": name,
-            "price": data,
-            "ann_volatility": ann_vol.loc[starting_date_1y:],
-            "30_d_volatility_vix": vix.loc[starting_date_1y:],
-            # "garch_volatility": garch_estimated_volatility(data),
-            "ma50": ma50.loc[starting_date_1y:],
-            "ma200": ma200.loc[starting_date_1y:],
-            "earnings": earnings_dates,
-        }
-        return result_dict
+    # calculate the Kelly leverage fraction
+    return (mean - time_window_risk_free) / std**2
 
 
 def estimated_annualized_volatility(data_high: pd.Series, data_low: pd.Series) -> float:
