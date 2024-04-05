@@ -378,7 +378,7 @@ def get_prophet_forecast(price: pd.Series) -> tuple[pd.DataFrame, pd.DataFrame]:
     :return: tuple, two forecast dataframes
     """
     # initialize two Prophet model
-    model_1, model_2 = Prophet(), Prophet()
+    model_1, model_2 = Prophet(interval_width=0.95), Prophet(interval_width=0.95)
     # fit the models to the price data
     model_1.fit(pd.DataFrame({"ds": price.index.tz_localize(None), "y": price.values}))
     # repeat the fit but remove the last 5 days to compare the forecasts
