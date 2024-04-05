@@ -1,6 +1,7 @@
 arch
 numpy
 plotly
+prophet
 streamlit
 tqdm
 yfinance==0.2.37
