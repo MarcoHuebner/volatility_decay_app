@@ -13,6 +13,8 @@ import yfinance
 from arch import arch_model
 from tqdm import tqdm
 
+from src import constants
+
 
 # define the mathematical functions
 def leveraged_return(
@@ -38,15 +40,15 @@ def leveraged_return(
     r = cagr_underlying
     E = leverage_expense_ratio
     I = libor
-    s = yearly_volatility / np.sqrt(252)  # get daily volatility
+    s = yearly_volatility / np.sqrt(constants.trading_days)  # get daily volatility
 
     # define helpful quantities to avoid repitition & better overview
-    exp = np.exp(np.log(1 + r) / 252)
-    e_i = (E + 1.1 * (x - 1) * I) / 252
+    exp = np.exp(np.log(1 + r) / constants.trading_days)
+    e_i = (E + 1.1 * (x - 1) * I) / constants.trading_days
     first = x * s + x * s**2 / (2 * exp) + x * exp - e_i - x + 1
     second = x * exp**2 / (s + 0.5 * s**2 * exp ** (-1) + exp) - e_i - x + 1
 
-    return (first * second) ** 126 - 1
+    return (first * second) ** (constants.trading_days // 2) - 1
 
 
 def leveraged_return_mesh(
@@ -249,10 +251,12 @@ def estimated_annualized_volatility(data_high: pd.Series, data_low: pd.Series) -
     daily_volatility = np.log(data_high / data_low)
 
     # Convert to annualized volatility in percent
-    return daily_volatility * np.sqrt(252) * 100
+    return daily_volatility * np.sqrt(constants.trading_days) * 100
 
 
-def empirical_annualized_volatility(data: pd.Series, window: int = 252) -> float:
+def empirical_annualized_volatility(
+    data: pd.Series, window: int = constants.trading_days
+) -> float:
     """
     Calculate the annualized volatility for every day in the stock data.
 
@@ -264,7 +268,7 @@ def empirical_annualized_volatility(data: pd.Series, window: int = 252) -> float
     volatility = data.pct_change().rolling(window=window).std().dropna()
 
     # Convert to annualized volatility in percent
-    return volatility * np.sqrt(252) * 100
+    return volatility * np.sqrt(constants.trading_days) * 100
 
 
 def garch_estimated_volatility(data: pd.Series) -> float:
@@ -283,8 +287,11 @@ def garch_estimated_volatility(data: pd.Series) -> float:
     # Reduce the number of forecasts to speed up the computation
     reduction_factor = 3
     # Do recursive forecasting for the last year
-    for i in tqdm(range(252 // reduction_factor), desc=f"{model_type} forecasting"):
-        end_date = daily_returns.index[-252 + i * reduction_factor]
+    for i in tqdm(
+        range(constants.trading_days // reduction_factor),
+        desc=f"{model_type} forecasting",
+    ):
+        end_date = daily_returns.index[-constants.trading_days + i * reduction_factor]
         am = arch_model(
             daily_returns.loc[:end_date],
             mean="AR",
@@ -298,7 +305,9 @@ def garch_estimated_volatility(data: pd.Series) -> float:
         # Get the volatility forecast
         temp = res.forecast(reindex=False).variance
         # Store and annualize the forecast
-        forecasts[temp.index[0]] = temp.iloc[0].values[0] * np.sqrt(252)
+        forecasts[temp.index[0]] = temp.iloc[0].values[0] * np.sqrt(
+            constants.trading_days
+        )
 
     return pd.Series(forecasts)
 
@@ -338,7 +347,7 @@ def fetch_ticker_data(ticker: str) -> dict[str, None | str | pd.Series | pd.Data
         raise ValueError(f"Ticker {ticker} not found. Please check the ticker symbol.")
     else:
         # Slice the data to the one and two years, to reduce computation time
-        starting_date_1y = data.index[-252]
+        starting_date_1y = data.index[-constants.trading_days]
         # Calculate the moving averages
         ma50 = data.rolling(window=50).mean().dropna()
         ma200 = data.rolling(window=200).mean().dropna()

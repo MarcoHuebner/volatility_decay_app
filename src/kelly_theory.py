@@ -7,15 +7,8 @@ heatmap.
 import numpy as np
 import plotly.graph_objects as go
 
+from src import constants
 from src.utils import kelly_crit, leveraged_return_mesh
-
-# define display functions
-ann_return = 0.037 * 252
-ann_risk_free = 0.005 * 252
-ann_vol = 1.2 * np.sqrt(252)
-# define heatmap marginals (-50% - 50% underlying CAGR, 0-50% annualized volatility)
-cagr_f_underlying = np.linspace(-20, 60, 161, endpoint=True)
-volatility_f_undr = np.linspace(0.5, 50, 100, endpoint=True)
 
 
 def update_result(
@@ -39,13 +32,10 @@ def kelly_crit_mesh(
     return np.round(mesh, 2)
 
 
-# define parameters (except for leverage all in percent)
-lev_r = 2.0
-exp_r = 0.6
-libor = 0.5
 # define heatmap marginals (-50% - 50% underlying CAGR, 0-50% annualized volatility)
 cagr_underlying = np.linspace(-50, 50, 201, endpoint=True)
 volatility_undr = np.linspace(0.0, 50, 101, endpoint=True)
+
 
 # define the data
 zmin, zmax = -15, 20
@@ -53,7 +43,13 @@ data = [
     go.Heatmap(
         x=cagr_underlying,
         y=volatility_undr,
-        z=leveraged_return_mesh(lev_r, cagr_underlying, exp_r, libor, volatility_undr),
+        z=leveraged_return_mesh(
+            constants.lev_r,
+            cagr_underlying,
+            constants.exp_r,
+            constants.libor,
+            volatility_undr,
+        ),
         zmax=zmax,
         zmid=0,
         zmin=zmin,
@@ -67,7 +63,13 @@ data_contour = [
     go.Contour(
         x=cagr_underlying,
         y=volatility_undr,
-        z=leveraged_return_mesh(lev_r, cagr_underlying, exp_r, libor, volatility_undr),
+        z=leveraged_return_mesh(
+            constants.lev_r,
+            cagr_underlying,
+            constants.exp_r,
+            constants.libor,
+            volatility_undr,
+        ),
         zmax=zmax,
         zmid=0,
         zmin=zmin,
@@ -108,13 +110,20 @@ def update_plot(
     return fig
 
 
+# define heatmap marginals (-50% - 50% underlying CAGR, 0-50% annualized volatility)
+cagr_f_underlying = np.linspace(-20, 60, 161, endpoint=True)
+volatility_f_undr = np.linspace(0.5, 50, 100, endpoint=True)
+
+
 # define the Kelly criterion data
 zmin_f, zmax_f = 0, 10
 data_f = [
     go.Heatmap(
         x=cagr_f_underlying,
         y=volatility_f_undr,
-        z=kelly_crit_mesh(cagr_f_underlying, ann_risk_free, volatility_f_undr),
+        z=kelly_crit_mesh(
+            cagr_f_underlying, constants.ann_risk_free, volatility_f_undr
+        ),
         zmin=zmin_f,
         zmid=1,
         zmax=zmax_f,
@@ -126,7 +135,9 @@ data_f_contour = [
     go.Contour(
         x=cagr_f_underlying,
         y=volatility_f_undr,
-        z=kelly_crit_mesh(cagr_f_underlying, ann_risk_free, volatility_f_undr),
+        z=kelly_crit_mesh(
+            cagr_f_underlying, constants.ann_risk_free, volatility_f_undr
+        ),
         zmin=zmin_f,
         zmid=1,
         zmax=zmax_f,

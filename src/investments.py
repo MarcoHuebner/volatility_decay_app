@@ -4,8 +4,10 @@ Define the functions to update the plots for the investments page.
 """
 
 import numpy as np
+import pandas as pd
 import plotly.graph_objects as go
 
+from src import constants
 from src.utils import (
     fetch_ticker_data,
     kelly_crit,
@@ -16,6 +18,14 @@ from src.utils import (
     simplified_lev_factor,
     xaxis_slider,
 )
+
+# define colours, loosely related to the streamlit default colours
+# https://discuss.streamlit.io/t/access-streamlit-default-color-palette/35737
+st_blue = "#83c9ff"
+st_dark_blue = "#0068c9"
+st_darker_blue = "#0054a3"
+st_red = "#ff2b2b"
+st_green = "#21c354"
 
 
 # define the ticker price data plot
@@ -33,7 +43,7 @@ def update_ticker_plot(ticker: str, risk_free_rate_ticker: float) -> go.Figure:
 
     # get data
     result_dict = fetch_ticker_data(ticker)
-    price = result_dict["price"].tail(252)
+    price = result_dict["price"].tail(constants.trading_days)
     # get earning dates if not None (e.g. for indices)
     if result_dict["earnings"] is not None:
         earnings = result_dict["earnings"]["Reported EPS"]
@@ -107,7 +117,7 @@ def update_ticker_plot(ticker: str, risk_free_rate_ticker: float) -> go.Figure:
     fig.add_trace(
         go.Scatter(
             x=price.index,
-            y=pct_change.iloc[-252:],
+            y=pct_change.iloc[-constants.trading_days :],
             mode="lines",
             name="Daily Returns",
             yaxis="y3",
@@ -121,7 +131,7 @@ def update_ticker_plot(ticker: str, risk_free_rate_ticker: float) -> go.Figure:
 
     # calculate the Kelly Criterion with maximum of the three volatilities
     average_vol_30d = result_dict["30_d_volatility_vix"].iloc[-52:].mean()
-    average_daily_return = pct_change.iloc[-252:].mean()
+    average_daily_return = pct_change.iloc[-constants.trading_days :].mean()
     max_vol = max(
         result_dict["ann_volatility"].iloc[-1],
         # result_dict["garch_volatility"].iloc[-1],
@@ -131,7 +141,7 @@ def update_ticker_plot(ticker: str, risk_free_rate_ticker: float) -> go.Figure:
     safety_return = -2
     safety_vol = 3
     kelly = kelly_crit(
-        average_daily_return * 252 + safety_return,
+        average_daily_return * constants.trading_days + safety_return,
         risk_free_rate_ticker,
         max_vol + safety_vol,
     )
@@ -177,8 +187,7 @@ def update_ticker_plot(ticker: str, risk_free_rate_ticker: float) -> go.Figure:
     return fig
 
 
-# define the past leverage and knock out returns plot
-def update_derivatives_performance_plot(
+def get_derivatives_data(
     ticker: str,
     risk_free_rate_ticker: float,
     leverage: float,
@@ -186,33 +195,31 @@ def update_derivatives_performance_plot(
     rel_transact_costs: float,
     time_window: int,
     holding_period: int,
-) -> go.Figure:
-    # create the plotly figure
-    fig = go.Figure()
-    # define colours, loosely related to the streamlit default colours
-    # https://discuss.streamlit.io/t/access-streamlit-default-color-palette/35737
-    st_blue = "#83c9ff"
-    st_dark_blue = "#0068c9"
-    st_darker_blue = "#0054a3"
-    st_red = "#ff2b2b"
-    st_green = "#21c354"
-
-    # get data
+) -> dict[str, pd.Series | list | float]:
+    # get data of the underlying
     result_dict = fetch_ticker_data(ticker)
-    price = result_dict["price"].tail(252)
+    price = result_dict["price"].tail(constants.trading_days)
     pct_change = result_dict["price"].pct_change()
     # get earning dates if not None (e.g. for indices)
     if result_dict["earnings"] is not None:
         earnings = result_dict["earnings"]["Reported EPS"]
+    else:
+        earnings = None
 
-    # how have derivatives bought with kelly criterion > 5 performed in the past?
-    # show results of holding_period day intervals
-    kelly_crit = kelly_leverage(
+    # define the data dictionary
+    data_dict = {"name": result_dict["name"], "price": price, "earnings": earnings}
+
+    # how have derivatives with kelly criterion > 5 performed in the past?
+    # show results of fixed length holding_period day intervals
+    kelly_lev = kelly_leverage(
         pct_change, risk_free_rate_ticker, time_window=time_window
-    ).tail(252)
-    pct_change = pct_change.tail(252)
+    ).tail(constants.trading_days)
+    pct_change = pct_change.tail(constants.trading_days)
     # get days on which the kelly criterion was > 5
-    dates_iloc = np.where(kelly_crit > 5)[0]
+    dates_iloc = np.where(kelly_lev > 5)[0]
+    # add leverage and dates to the return dictionary
+    data_dict["kelly_lev"] = kelly_lev
+    data_dict["dates_iloc"] = dates_iloc
     if dates_iloc.size == 0:
         # set to 0 if no signals
         returns_1x, returns_lev, returns_ko = [0], [0], [0]
@@ -250,7 +257,7 @@ def update_derivatives_performance_plot(
             )
             for date in dates_iloc
         ]
-        # Pre-compute quantities to simplify the code
+        # pre-compute quantities to simplify the code
         pos_returns_ko = [r for r in returns_ko if r > 0]
         avg_win_ko = sum(pos_returns_ko) / len(pos_returns_ko)
         neg_returns_ko = [r for r in returns_ko if r <= 0]
@@ -259,18 +266,57 @@ def update_derivatives_performance_plot(
         avg_win_f = sum(pos_returns_f) / len(pos_returns_f)
         neg_returns_f = [r for r in returns_lev if r <= 0]
         avg_loss_f = sum(neg_returns_f) / len(neg_returns_f)
-        # Calculate win ratios and reward ratios
+        # calculate win ratios and reward ratios
         win_ratio_ko = len(pos_returns_ko) / len(returns_ko) * 100
         win_ratio_f = len(pos_returns_f) / len(returns_lev) * 100
         reward_ko = avg_win_ko / abs(avg_loss_ko)
         reward_f = avg_win_f / abs(avg_loss_f)
-    # Calculate opacities based on comparison of returns
+
+    # add returns to the return dictionary
+    data_dict["returns_1x"] = returns_1x
+    data_dict["returns_lev"] = returns_lev
+    data_dict["returns_ko"] = returns_ko
+    # add win ratios and reward ratios to the return dictionary
+    data_dict["win_ratio_ko"] = win_ratio_ko
+    data_dict["win_ratio_f"] = win_ratio_f
+    data_dict["reward_ko"] = reward_ko
+    data_dict["reward_f"] = reward_f
+
+    # calculate opacities based on comparison of returns
     opacities_lev = [
         0.3 if lev <= ko else 1.0 for lev, ko in zip(returns_lev, returns_ko)
     ]
     opacities_ko = [
         0.3 if ko < lev else 1.0 for lev, ko in zip(returns_lev, returns_ko)
     ]
+
+    # add opacities to the return dictionary
+    data_dict["opacities_lev"] = opacities_lev
+    data_dict["opacities_ko"] = opacities_ko
+
+    return data_dict
+
+
+# define the past leverage and knock out returns plot
+def update_derivatives_performance_plot(
+    data_dict: dict[str, pd.Series | list | float],
+    leverage: float,
+    holding_period: int,
+) -> go.Figure:
+    # create the plotly figure
+    fig = go.Figure()
+
+    # unpack the data dictionary
+    name = data_dict["name"]
+    price = data_dict["price"]
+    earnings = data_dict["earnings"]
+    kelly_lev = data_dict["kelly_lev"]
+    dates_iloc = data_dict["dates_iloc"]
+    returns_1x = data_dict["returns_1x"]
+    returns_lev = data_dict["returns_lev"]
+    returns_ko = data_dict["returns_ko"]
+    opacities_lev = data_dict["opacities_lev"]
+    opacities_ko = data_dict["opacities_ko"]
 
     # add price line
     fig.add_trace(
@@ -282,7 +328,7 @@ def update_derivatives_performance_plot(
             line=dict(color=st_blue),
         )
     )
-    if result_dict["earnings"] is not None:
+    if earnings is not None:
         # add earnings dates
         fig = plot_earnings_dates(earnings, price, fig)
     # add unleveraged returns
@@ -353,8 +399,8 @@ def update_derivatives_performance_plot(
     # add leverage factor
     fig.add_trace(
         go.Scatter(
-            x=kelly_crit.index,
-            y=kelly_crit,
+            x=kelly_lev.index,
+            y=kelly_lev,
             mode="lines",
             name="Kelly Leverage Factor",
             yaxis="y3",
@@ -366,7 +412,7 @@ def update_derivatives_performance_plot(
     # add typical leverage cutoff
     fig.add_trace(
         go.Scatter(
-            x=[kelly_crit.index.min(), kelly_crit.index.max()],
+            x=[kelly_lev.index.min(), kelly_lev.index.max()],
             y=[5, 5],
             mode="lines",
             yaxis="y3",
@@ -379,11 +425,10 @@ def update_derivatives_performance_plot(
 
     # update layout
     fig.update_layout(
-        title="<span style='font-size: 24px;'>How Derivatives of "
-        + f"{result_dict['name']} Performed</span><br>"
-        + "<span style='font-size: 16px;'>Given a 60-day Rolling Kelly "
-        + "Leverage Factor as Signal - Amount of Signals in the Past 252 "
-        + f"Trading Days: {len(dates_iloc)}</span>",
+        title=f"<span style='font-size: 24px;'>{name} Derivative Performance</span><br>"
+        + "<span style='font-size: 16px;'>Given a Rolling Kelly Leverage Factor of 5"
+        + f" as Signal - Amount of Signals in the Past {constants.trading_days}"
+        + f" Trading Days: {len(dates_iloc)}</span>",
         hovermode="x unified",
         yaxis=dict(
             title="Closing Prices", title_font=dict(color=st_blue), hoverformat=".2f"
@@ -410,4 +455,90 @@ def update_derivatives_performance_plot(
         domain=[0.0, 0.89],
     )
 
-    return fig, win_ratio_ko, win_ratio_f, reward_ko, reward_f
+    return fig
+
+
+def update_derivates_calibration_plot(
+    data_dict: dict[str, pd.Series | list | float], leverage: float, holding_period: int
+) -> go.Figure:
+    # create the plotly figure
+    fig = go.Figure()
+
+    # unpack the data dictionary
+    name = data_dict["name"]
+    returns_1x = data_dict["returns_1x"]
+    returns_lev = data_dict["returns_lev"]
+    returns_ko = data_dict["returns_ko"]
+    opacities_lev = data_dict["opacities_lev"]
+    opacities_ko = data_dict["opacities_ko"]
+
+    # Add calibration plot to the second subplot
+    fig.add_trace(
+        go.Scatter(
+            x=returns_1x,
+            y=returns_lev,
+            mode="markers",
+            name=f"{leverage}x Factor",
+            marker=dict(
+                color=st_dark_blue, symbol="triangle-up", opacity=opacities_lev
+            ),
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=returns_1x,
+            y=returns_ko,
+            mode="markers",
+            name=f"{leverage}x Knockout",
+            marker=dict(color=st_darker_blue, symbol="square", opacity=opacities_ko),
+        )
+    )
+    # add derivatives zero return line
+    fig.add_shape(
+        type="line",
+        xref="x",
+        yref="y",
+        x0=0,
+        y0=min(min(returns_lev), min(returns_ko)),
+        x1=0,
+        y1=max(max(returns_lev), max(returns_ko)),
+        line=dict(
+            color=st_green,
+            width=2,
+            dash="dash",
+        ),
+    )
+    # add underlying zero returns line
+    fig.add_shape(
+        type="line",
+        xref="x",
+        yref="y",
+        x0=min(returns_1x),
+        y0=0,
+        x1=max(returns_1x),
+        y1=0,
+        line=dict(
+            color=st_darker_blue,
+            width=2,
+            dash="dash",
+        ),
+    )
+
+    fig.update_layout(
+        title=f"<span style='font-size: 24px;'>{name} Derivative Performance Calibration</span><br>"
+        + "<span style='font-size: 16px;'>Comparison of the Returns of the Underlying"
+        + f" and {leverage}x Factors and Knockouts for {holding_period} Day Time Intervals</span>",
+        hovermode="x unified",
+        yaxis=dict(
+            title=f"{leverage}x Factor and Knockout Returns [%]",
+            title_font=dict(color=st_darker_blue),
+            hoverformat=".2f",
+        ),
+        xaxis=dict(
+            title="Underlying Returns [%]",
+            title_font=dict(color=st_green),
+            hoverformat=".2f",
+        ),
+    )
+
+    return fig

@@ -6,7 +6,11 @@ average daily range, volatility, and positive returns.
 
 import pandas as pd
 
-from src.utils import empirical_annualized_volatility, kelly_stock_universe, performance_cumprod
+from src.utils import (
+    empirical_annualized_volatility,
+    kelly_stock_universe,
+    performance_cumprod,
+)
 
 
 def kelly_selection(
@@ -35,12 +39,10 @@ def adr_selection(
     return daily_range, average_daily_range
 
 
-def volatility_selection(
-    adj_close_data: pd.DataFrame, n_days: int
-) -> pd.Series:
+def volatility_selection(adj_close_data: pd.DataFrame, n_days: int) -> pd.Series:
     # Compute the volatility for the stock universe
     volatility = empirical_annualized_volatility(adj_close_data, window=n_days)
-    
+
     return volatility.iloc[0].round(2)
 
 

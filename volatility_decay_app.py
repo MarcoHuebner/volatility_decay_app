@@ -20,20 +20,21 @@ ipywidgets>=7.0.0
 
 import streamlit as st
 
-from src.investments import update_derivatives_performance_plot, update_ticker_plot
-from src.kelly_theory import (
-    ann_return,
-    ann_risk_free,
-    ann_vol,
-    exp_r,
-    lev_r,
-    libor,
-    update_kelly_plot,
-    update_plot,
-    update_result,
+from src import constants
+from src.investments import (
+    get_derivatives_data,
+    update_derivates_calibration_plot,
+    update_derivatives_performance_plot,
+    update_ticker_plot,
 )
-from src.stock_screener import adr_selection, kelly_selection, positive_return_selection, volatility_selection
-from src.utils import download_universe, empirical_annualized_volatility
+from src.kelly_theory import update_kelly_plot, update_plot, update_result
+from src.stock_screener import (
+    adr_selection,
+    kelly_selection,
+    positive_return_selection,
+    volatility_selection,
+)
+from src.utils import download_universe
 
 if __name__ == "__main__":
     # define the layout
@@ -81,14 +82,16 @@ if __name__ == "__main__":
             "## [Kelly Criterion](https://rhsfinancial.com/2017/06/20/line-aggressive-crazy-leverage/) Calculator (Annualized)"
         )
         # Text input for yearly expected return
-        input_er = st.number_input("Expected Yearly Return [%]", value=ann_return)
+        input_er = st.number_input(
+            "Expected Yearly Return [%]", value=constants.ann_return
+        )
         # Text input for yearly risk free rate
         input_risk_free = st.number_input(
-            "Risk Free Yearly Return [%] (Costs)", value=ann_risk_free
+            "Risk Free Yearly Return [%] (Costs)", value=constants.ann_risk_free
         )
         # Text input for yearly return volatility
         input_volatility = st.number_input(
-            "Annualized Volatility of the Underlying [%]", value=ann_vol
+            "Annualized Volatility of the Underlying [%]", value=constants.ann_vol
         )
         # Display the result
         result = update_result(input_er, input_risk_free, input_volatility)
@@ -113,16 +116,24 @@ if __name__ == "__main__":
             "Exposure to the Market (Leverage) [%]",
             min_value=0.0,
             max_value=1000.0,
-            value=lev_r * 100,
+            value=constants.lev_r * 100,
             step=10.0,
         )
         # Slider for TER
         ter = st.slider(
-            "TER of the ETF [%]", min_value=0.0, max_value=2.0, value=exp_r, step=0.05
+            "TER of the ETF [%]",
+            min_value=0.0,
+            max_value=2.0,
+            value=constants.exp_r,
+            step=0.05,
         )
         # Slider for LIBOR
         libor = st.slider(
-            "LIBOR rate [%]", min_value=0.0, max_value=4.0, value=libor, step=0.1
+            "LIBOR rate [%]",
+            min_value=0.0,
+            max_value=4.0,
+            value=constants.libor,
+            step=0.1,
         )
         # Placeholder for the graph
         st.plotly_chart(
@@ -263,13 +274,8 @@ if __name__ == "__main__":
             value=3.0,
             step=0.25,
         )
-        (
-            derivates_fig,
-            win_ratio_ko,
-            win_ratio_f,
-            reward_ko,
-            reward_f,
-        ) = update_derivatives_performance_plot(
+        # Calculate the performance of the derivatives
+        data_dict = get_derivatives_data(
             ticker_symbol,
             risk_free_rate_ticker,
             derivative_leverage,
@@ -278,16 +284,36 @@ if __name__ == "__main__":
             look_back_window,
             holding_period,
         )
+        # Display aggregated statistics of the derivatives
+        win_ratio_ko = data_dict["win_ratio_ko"]
+        win_ratio_f = data_dict["win_ratio_f"]
+        reward_ko = data_dict["reward_ko"]
+        reward_f = data_dict["reward_f"]
+        # Update the derivatives performance plot
+        derivates_fig = update_derivatives_performance_plot(
+            data_dict,
+            derivative_leverage,
+            holding_period,
+        )
         st.write(
-            "Win ratio over the past 252 trading days (KO / Factor):"
+            f"Win ratio over the past {constants.trading_days} trading days (KO / Factor):"
             + f" {win_ratio_ko:.1f}%/ {win_ratio_f:.1f}%. Average risk (loss)"
-            + " vs. average reward (win) per trade over the past 252 trading"
-            + f" days (KO/ Factor): 1:{reward_ko:.2f}/ 1:{reward_f:.2f}"
+            + f" vs. average reward (win) per trade over the past {constants.trading_days}"
+            + f" trading days (KO/ Factor): 1:{reward_ko:.2f}/ 1:{reward_f:.2f}"
         )
         st.plotly_chart(
             derivates_fig,
             use_container_width=True,
         )
+        # Add a calibration plot for the derivatives performance
+        calibration_fig = update_derivates_calibration_plot(
+            data_dict, derivative_leverage, holding_period
+        )
+        st.plotly_chart(
+            calibration_fig,
+            use_container_width=True,
+        )
+        print("test")
 
     with tab3:
         # Header for the Stock Screener
