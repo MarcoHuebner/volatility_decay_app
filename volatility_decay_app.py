@@ -24,6 +24,7 @@ import streamlit as st
 
 from utils import (
     download_universe,
+    empirical_annualized_volatility,
     fetch_ticker_data,
     kelly_leverage,
     kelly_stock_universe,
@@ -991,3 +992,80 @@ if __name__ == "__main__":
         col3.dataframe(data=top_adr_returns[top_adr.index])
         col4.write(f"Return [%] in the past 30 days:")
         col4.dataframe(data=top_adr_30_returns[top_adr_30.index])
+
+        st.markdown(
+            """
+            ### Custom Filters \n
+            Filter stocks for custom Kelly leverage, average daily range (ADR), 
+            and volatility in the past 60 days (30 days).
+            """
+        )
+        # Slider for the Kelly filter
+        kelly_filter = st.slider(
+            "Min. Kelly Leverage [%]", min_value=2.5, max_value=30.0, value=5.0, step=2.5
+        )
+        # Slider for the ADR filter
+        adr_filter = st.slider(
+            "Min. Average Daily Range (ADR) [%]", min_value=0.0, max_value=10.0, value=1.5, step=0.5
+        )
+        # Slider for the volatility filter
+        volatility_filter = st.slider(
+            "Max. Annualized Volatility [%]",
+            min_value=5.0,
+            max_value=100.0,
+            value=15.0,
+            step=5.0,
+        )
+
+        # Apply filters to the leverage factor
+        filter_lev_60 = leverage > kelly_filter
+        filter_lev_30 = leverage_30 > kelly_filter
+        # Apply filters to the average daily range
+        adr_60 = (100 * (daily_range - 1)).round(2)
+        filter_adr_60 = adr_60 > adr_filter
+        # average_daily_range.name = "ADR [%]"
+        # Repeat for a different time window
+        adr_30 = (100 * (daily_range_30 - 1)).round(2)
+        filter_adr_30 = adr_30 > adr_filter
+        # top_adr_returns
+        # Apply filters to the volatility
+        vol_60 = (
+            empirical_annualized_volatility(adj_close_data, window=60).iloc[-1].round(2)
+        )
+        filter_vol_60 = vol_60 < volatility_filter
+        # Repeat for a different time window
+        vol_30 = (
+            empirical_annualized_volatility(adj_close_data, window=30).iloc[-1].round(2)
+        )
+        filter_vol_30 = vol_30 < volatility_filter
+
+        # Combine the filters
+        combined_60 = filter_lev_60 & filter_adr_60 & filter_vol_60
+        combined_30 = filter_lev_30 & filter_adr_30 & filter_vol_30
+
+        # Create new dataframes for the filtered stocks
+        filtered_data_60 = adj_close_data.iloc[-1].T.round(2).to_frame()[combined_60]
+        filtered_data_60.columns = ["Adj. Close"]
+        filtered_data_60["Adj. Close"] = filtered_data_60["Adj. Close"].astype('float64')
+        filtered_data_60["Kelly Leverage"] = leverage.round(2)[combined_60]
+        filtered_data_60["ADR [%]"] = adr_60[combined_60]
+        filtered_data_60["Volatility [%]"] = vol_60[combined_60]
+        filtered_data_30 = adj_close_data.iloc[-1].T.round(2).to_frame()[combined_30]
+        filtered_data_30.columns = ["Adj. Close"]
+        filtered_data_30["Adj. Close"] = filtered_data_30["Adj. Close"].astype('float64')
+        filtered_data_30["Kelly Leverage"] = leverage_30.round(2)[combined_30]
+        filtered_data_30["ADR [%]"] = adr_30[combined_30]
+        filtered_data_30["Volatility [%]"] = vol_30[combined_30]
+        
+        # Sort the dataframes by the Kelly leverage
+        filtered_data_60 = filtered_data_60.sort_values(by="Kelly Leverage", ascending=False)
+        filtered_data_30 = filtered_data_30.sort_values(by="Kelly Leverage", ascending=False)
+
+        # Create columns for the indicators
+        col1, col2 = st.columns(2)
+
+        # Use the columns for display
+        col1.write(f"Filtered stocks ({n_days} days): {len(filtered_data_60)}")
+        col1.dataframe(data=filtered_data_60)
+        col2.write(f"Filtered stocks (30 days): {len(filtered_data_30)}")
+        col2.dataframe(data=filtered_data_30)
