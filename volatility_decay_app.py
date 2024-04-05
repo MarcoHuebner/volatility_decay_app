@@ -29,7 +29,7 @@ from src.investments import (
 )
 from src.kelly_theory import update_kelly_plot, update_plot, update_result
 from src.stock_screener import (
-    adr_selection,
+    compute_adr,
     kelly_selection,
     positive_return_selection,
     volatility_selection,
@@ -313,7 +313,6 @@ if __name__ == "__main__":
             calibration_fig,
             use_container_width=True,
         )
-        print("test")
 
     with tab3:
         # Header for the Stock Screener
@@ -332,7 +331,7 @@ if __name__ == "__main__":
         )
         if filter_by_volume:
             # Filter data based on the "Volume" column
-            sufficient_volume = (data["Volume"] < 1000000).all(axis=0) == False
+            sufficient_volume = (data["Volume"] > 100000).all(axis=0)
             # Remove columns with insufficient volume
             filtered_cols = [
                 col
@@ -390,8 +389,8 @@ if __name__ == "__main__":
         low_data = data.xs("Low", level=0, axis=1).iloc[-n_days_60:]
         low_data = low_data[filtered_cols]
         # Calculate the average daily range for the past n_days
-        dr_60, adr_60 = adr_selection(high_data, low_data, n_days_60)
-        dr_30, adr_30 = adr_selection(
+        dr_60, adr_60 = compute_adr(high_data, low_data, n_days_60)
+        dr_30, adr_30 = compute_adr(
             high_data.iloc[-n_days_30:], low_data.iloc[-n_days_30:], n_days_30
         )
 
@@ -521,7 +520,7 @@ if __name__ == "__main__":
         col1, col2 = st.columns(2)
 
         # Use the columns for display
-        col1.write(f"Filtered stocks ({n_days_60} days): {len(filtered_data_60)}")
+        col1.write(f"Filtered stocks ({n_days_60} day window): {len(filtered_data_60)}")
         col1.dataframe(data=filtered_data_60)
-        col2.write(f"Filtered stocks ({n_days_30} days): {len(filtered_data_30)}")
+        col2.write(f"Filtered stocks ({n_days_30} day window): {len(filtered_data_30)}")
         col2.dataframe(data=filtered_data_30)

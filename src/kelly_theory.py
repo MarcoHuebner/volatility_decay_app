@@ -8,7 +8,7 @@ import numpy as np
 import plotly.graph_objects as go
 
 from src import constants
-from src.utils import kelly_crit, leveraged_return_mesh
+from src.utils import kelly_crit, kelly_crit_mesh, leveraged_return_mesh
 
 
 def update_result(
@@ -17,19 +17,6 @@ def update_result(
     # display the Kelly Criterion
     kelly_f = kelly_crit(yearly_er, yearly_risk_free, yearly_volatility)
     return f"#### Ideal Market Exposure: {kelly_f*100:.0f}% ({kelly_f:.2f} leverage factor)"
-
-
-def kelly_crit_mesh(
-    yearly_er: float, yearly_risk_free: float, yearly_volatility: float
-) -> np.ndarray:
-    # calculate the Kelly Criterion meshed for different underlying CAGR and volatility
-    mesh = np.zeros((len(yearly_volatility), len(yearly_er)))
-    for i, vol in enumerate(yearly_volatility):
-        for j, cagr in enumerate(yearly_er):
-            # reflect on volatility axis due to the way, plotly sets-up heatmaps
-            # also, rescale percentage values, as otherwise not readable in the sliders
-            mesh[i, j] = kelly_crit(cagr, yearly_risk_free, vol)
-    return np.round(mesh, 2)
 
 
 # define heatmap marginals (-50% - 50% underlying CAGR, 0-50% annualized volatility)

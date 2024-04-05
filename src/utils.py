@@ -94,6 +94,8 @@ def performance_cumprod(returns: pd.Series | pd.DataFrame) -> float | pd.Series:
     :param returns: pd.Series | pd.DataFrame, daily returns
     :return: float | pd.Series, return on the last day in percent
     """
+    if returns.isnull().values.any():
+        raise ValueError("The returns contain missing values.")
     return ((1 + returns).cumprod().iloc[-1] - 1) * 100
 
 
@@ -116,6 +118,11 @@ def simplified_lev_factor(
     :param percent: float, percentage factor used for expense ratio conversion
     :return: pd.Series, daily returns of the factor with leverage
     """
+    if not isinstance(leverage, float):
+        raise TypeError("The leverage must be a float.")
+    if daily_returns.isnull().values.any() or daily_returns.empty:
+        raise ValueError("The daily returns contain missing values or are empty.")
+    # compute daily returns of the factor product
     daily_returns = daily_returns * leverage + gmean(-expense_ratio / percent)
 
     # simplify: Assume the costs consist of only volume dependend costs, neglecting fixed costs
@@ -148,6 +155,10 @@ def simplified_knockout(
     :param percent: float, percentage factor used for expense ratio conversion
     :return: pd.Series, daily returns of the knockout product
     """
+    if not isinstance(initial_leverage, float):
+        raise TypeError("The leverage must be a float.")
+    if price.isnull().values.any() or price.empty:
+        raise ValueError("The price data contains missing values or is empty.")
     # compute knockout barrier, incl. expense ratio estimation
     ko_val = (
         price.iloc[0] * (1 - (1 / initial_leverage)) * (1 - expense_ratio / percent)
@@ -178,9 +189,23 @@ def kelly_crit(
     yearly_er: float, yearly_risk_free: float, yearly_volatility: float
 ) -> float:
     # calculate the Kelly Criterion for float inputs
+    if not np.all(yearly_volatility > 0):
+        raise ValueError("Volatility must be positive.")
     # NOTE: the factor of 100 corrects for the percentage values
-    assert np.all(yearly_volatility > 0)
     return 100 * (yearly_er - yearly_risk_free) / yearly_volatility**2
+
+
+def kelly_crit_mesh(
+    yearly_er: float, yearly_risk_free: float, yearly_volatility: float
+) -> np.ndarray:
+    # calculate the Kelly Criterion meshed for different underlying CAGR and volatility
+    mesh = np.zeros((len(yearly_volatility), len(yearly_er)))
+    for i, vol in enumerate(yearly_volatility):
+        for j, cagr in enumerate(yearly_er):
+            # reflect on volatility axis due to the way, plotly sets-up heatmaps
+            # also, rescale percentage values, as otherwise not readable in the sliders
+            mesh[i, j] = kelly_crit(cagr, yearly_risk_free, vol)
+    return np.round(mesh, 2)
 
 
 def kelly_leverage(
@@ -199,6 +224,8 @@ def kelly_leverage(
     :param safety: bool, whether to apply safety margins
     :return: pd.Series, Kelly leverage fraction
     """
+    if daily_returns.isnull().values.any() or daily_returns.empty:
+        raise ValueError("The daily returns contain missing values or are empty.")
     # get rolling average returns and volatility, excluding the current day
     rolling_returns_estimate = (
         daily_returns.shift(1).rolling(window=time_window).mean() * time_window
@@ -219,15 +246,19 @@ def kelly_leverage(
         rolling_returns_estimate - time_window_risk_free
     ) / rolling_volatility_estimate**2
 
-    # replace nan values with 1
+    # replace NaN values with 1
     return leverage.fillna(1.0)
 
 
 def kelly_stock_universe(
     data: pd.DataFrame, risk_free_rate: float, n_days: int
 ) -> pd.DataFrame:
-    # Compute the Kelly criterion for the stock universe (simplified)
-    change = data.pct_change()
+    # remove columns with NaN values
+    data = data.dropna(axis=1)
+    if data.isnull().values.any() or data.empty:
+        raise ValueError("The data contains missing values or is empty.")
+    # compute the Kelly criterion for the stock universe (simplified)
+    change = data.pct_change().dropna()
     mean = change.mean() * n_days
     std = change.std() * n_days**0.5
 
@@ -247,16 +278,19 @@ def estimated_annualized_volatility(data_high: pd.Series, data_low: pd.Series) -
     :param data: pd.Series, price data
     :return: float, annualized volatility in percent
     """
-    # Calculate the daily volatility
-    daily_volatility = np.log(data_high / data_low)
+    for data in [data_high, data_low]:
+        if data.isnull().values.any() or data.empty:
+            raise ValueError("The data contains missing values or is empty.")
+    # calculate the daily volatility
+    daily_volatility = np.log(data_high / data_low).mean()
 
-    # Convert to annualized volatility in percent
+    # convert to annualized volatility in percent
     return daily_volatility * np.sqrt(constants.trading_days) * 100
 
 
 def empirical_annualized_volatility(
-    data: pd.Series, window: int = constants.trading_days
-) -> float:
+    data: pd.Series | pd.DataFrame, window: int = constants.trading_days
+) -> float | pd.DataFrame:
     """
     Calculate the annualized volatility for every day in the stock data.
 
@@ -264,10 +298,12 @@ def empirical_annualized_volatility(
     :param window: int, window size for the rolling standard deviation
     :return: float, annualized volatility in percent
     """
-    # Calculate the volatility
+    if data.isnull().values.any() or data.empty:
+        raise ValueError("The data contains missing values or is empty.")
+    # calculate the volatility
     volatility = data.pct_change().rolling(window=window).std().dropna()
 
-    # Convert to annualized volatility in percent
+    # convert to annualized volatility in percent
     return volatility * np.sqrt(constants.trading_days) * 100
 
 
@@ -279,9 +315,11 @@ def garch_estimated_volatility(data: pd.Series) -> float:
     :param data: pd.Series, price data
     :return: float, forecasted annualized volatility
     """
-    # Calculate the daily returns
+    if data.isnull().values.any() or data.empty:
+        raise ValueError("The data contains missing values or is empty.")
+    # calculate the daily returns
     daily_returns = data.pct_change().dropna() * 100
-    # Create a GARCH model
+    # create a GARCH model
     model_type = "EGARCH"
     forecasts = {}
     # Reduce the number of forecasts to speed up the computation
@@ -320,19 +358,21 @@ def empirical_var(data: pd.Series, alpha: float) -> float:
     :param alpha: float, confidence level
     :return: float, VaR
     """
-    # Calculate the daily returns
+    if data.isnull().values.any() or data.empty:
+        raise ValueError("The data contains missing values or is empty.")
+    # calculate the daily returns
     daily_returns = data.pct_change().dropna()
 
-    # Calculate the VaR
+    # calculate the VaR
     return np.quantile(daily_returns, alpha)
 
 
 # define yfinance functions
-@st.cache_data(ttl=3600, show_spinner=False)  # cache for 1 hour
+@st.cache_data(ttl=3600, show_spinner=False)
 def fetch_ticker_data(ticker: str) -> dict[str, None | str | pd.Series | pd.DataFrame]:
     """
-    Fetch the stock data from Yahoo Finance API via yfinance and calculate the
-    50-day and 200-day moving average (MA).
+    Fetch the stock data from Yahoo Finance API via yfinance, cache it for one hour
+    and calculate the 50-day and 200-day moving average (MA).
 
     :param ticker: str, ticker symbol of the stock
     :return: dict, contains name, stock closing price, ann. vol., 30-day vol.,
@@ -376,17 +416,27 @@ def fetch_ticker_data(ticker: str) -> dict[str, None | str | pd.Series | pd.Data
         return result_dict
 
 
-@st.cache_data(ttl=3600 * 23.75, show_spinner=False)  # cache for a day minus overlap
+@st.cache_data(ttl=3600 * 23.75, show_spinner=False)
 def download_universe() -> pd.DataFrame:
-    # Opening and reading the symbols file (currently 1148 symbols, 172 unavailable)
+    """
+    Download the data for all (available) symbols in the universe and cache data for
+    one day minus 15 minutes overlap.
+
+    :return: pd.DataFrame, stock data for all symbols in the universe
+    """
+    # open and read the symbols file (currently 1148 symbols, 172 unavailable)
     symbols_list = open("assets/symbols_list.txt", "r")
     symbols = symbols_list.read().split()
     symbols_list.close()
 
-    # Download the data for all (available) symbols in the universe
-    # Takes about 3 minutes for around 1000 symbols
+    # download the data for all (available) symbols in the universe
+    # takes about 3 minutes for around 1000 symbols
     download = yfinance.download(symbols, period="3mo", interval="1d")
 
+    # fill missing values with preceding values (at most three) and then with subsequent
+    # values (at most three) e.g. to cover for country-specific public holidays
+    download = download.ffill(axis=1, limit=3).bfill(axis=1, limit=3)
+    # remove remaining columns with NaNs
     return download.dropna(axis=1)
 
 
@@ -434,14 +484,16 @@ def plot_earnings_dates(
     :param fig: go.Figure, the plotly figure
     :return: go.Figure, the updated plotly figure
     """
-    # Filter earnings dates to the last year and the next 90 days
+    if earnings.index.isnull().any() or earnings.empty:
+        raise ValueError("The earnings index contains missing values or is empty.")
+    # filter earnings dates to the last year and the next 90 days
     dates = earnings.index
     current_date = reference_data.index[-1]
     start_date = current_date - timedelta(days=365)
     end_date = current_date + timedelta(days=90)
     filtered_dates = dates[(dates >= start_date) & (dates <= end_date)]
 
-    # Add dummy scatter trace for the legend
+    # add dummy scatter trace for the legend
     fig.add_trace(
         go.Scatter(
             x=[None],
@@ -452,7 +504,7 @@ def plot_earnings_dates(
         )
     )
 
-    # Plot vertical dashed lines for each date
+    # plot vertical dashed lines for each date
     for date in filtered_dates:
         fig.add_shape(
             type="line",

@@ -3,9 +3,12 @@ Define the functions to update the plots for the investments page.
 
 """
 
+import math
+
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 from src import constants
 from src.utils import (
@@ -113,7 +116,7 @@ def update_ticker_plot(ticker: str, risk_free_rate_ticker: float) -> go.Figure:
         )
     )
     # add daily percentage change
-    pct_change = result_dict["price"].pct_change() * 100
+    pct_change = result_dict["price"].pct_change().dropna() * 100
     fig.add_trace(
         go.Scatter(
             x=price.index,
@@ -127,6 +130,7 @@ def update_ticker_plot(ticker: str, risk_free_rate_ticker: float) -> go.Figure:
     )
     if result_dict["earnings"] is not None:
         # add earnings dates
+        print(earnings)
         fig = plot_earnings_dates(earnings, price, fig)
 
     # calculate the Kelly Criterion with maximum of the three volatilities
@@ -199,7 +203,7 @@ def get_derivatives_data(
     # get data of the underlying
     result_dict = fetch_ticker_data(ticker)
     price = result_dict["price"].tail(constants.trading_days)
-    pct_change = result_dict["price"].pct_change()
+    pct_change = result_dict["price"].pct_change().dropna()
     # get earning dates if not None (e.g. for indices)
     if result_dict["earnings"] is not None:
         earnings = result_dict["earnings"]["Reported EPS"]
@@ -257,18 +261,24 @@ def get_derivatives_data(
             )
             for date in dates_iloc
         ]
-        # pre-compute quantities to simplify the code
+
+        # pre-compute quantities to simplify the code and catch division by zero
+        def avg_return(returns: list[float]) -> float:
+            if any(math.isnan(x) for x in returns):
+                raise ValueError("returns contains NaN values")
+            return sum(returns) / max(len(returns), 1)
+
         pos_returns_ko = [r for r in returns_ko if r > 0]
-        avg_win_ko = sum(pos_returns_ko) / len(pos_returns_ko)
+        avg_win_ko = avg_return(pos_returns_ko)
         neg_returns_ko = [r for r in returns_ko if r <= 0]
-        avg_loss_ko = sum(neg_returns_ko) / len(neg_returns_ko)
+        avg_loss_ko = avg_return(neg_returns_ko)
         pos_returns_f = [r for r in returns_lev if r > 0]
-        avg_win_f = sum(pos_returns_f) / len(pos_returns_f)
+        avg_win_f = avg_return(pos_returns_f)
         neg_returns_f = [r for r in returns_lev if r <= 0]
-        avg_loss_f = sum(neg_returns_f) / len(neg_returns_f)
+        avg_loss_f = avg_return(neg_returns_f)
         # calculate win ratios and reward ratios
-        win_ratio_ko = len(pos_returns_ko) / len(returns_ko) * 100
-        win_ratio_f = len(pos_returns_f) / len(returns_lev) * 100
+        win_ratio_ko = len(pos_returns_ko) / max(len(returns_ko), 1) * 100
+        win_ratio_f = len(pos_returns_f) / max(len(returns_lev), 1) * 100
         reward_ko = avg_win_ko / abs(avg_loss_ko)
         reward_f = avg_win_f / abs(avg_loss_f)
 
@@ -462,7 +472,7 @@ def update_derivates_calibration_plot(
     data_dict: dict[str, pd.Series | list | float], leverage: float, holding_period: int
 ) -> go.Figure:
     # create the plotly figure
-    fig = go.Figure()
+    fig = make_subplots(rows=1, cols=2, shared_yaxes=True)
 
     # unpack the data dictionary
     name = data_dict["name"]
@@ -472,7 +482,35 @@ def update_derivates_calibration_plot(
     opacities_lev = data_dict["opacities_lev"]
     opacities_ko = data_dict["opacities_ko"]
 
-    # Add calibration plot to the second subplot
+    # add violin plots to the first subplot
+    fig.add_trace(
+        go.Violin(
+            y=returns_lev,
+            name=f"{leverage}x Factor",
+            box_visible=True,
+            line_color=st_dark_blue,
+            side="negative",
+            points="all",
+            pointpos=0.4,
+        ),
+        row=1,
+        col=1,
+    )
+    fig.add_trace(
+        go.Violin(
+            y=returns_ko,
+            name=f"{leverage}x Knockout",
+            box_visible=True,
+            line_color=st_darker_blue,
+            side="negative",
+            points="all",
+            pointpos=0.4,
+        ),
+        row=1,
+        col=1,
+    )
+
+    # add calibration plot to the second subplot
     fig.add_trace(
         go.Scatter(
             x=returns_1x,
@@ -482,7 +520,9 @@ def update_derivates_calibration_plot(
             marker=dict(
                 color=st_dark_blue, symbol="triangle-up", opacity=opacities_lev
             ),
-        )
+        ),
+        row=1,
+        col=2,
     )
     fig.add_trace(
         go.Scatter(
@@ -491,7 +531,9 @@ def update_derivates_calibration_plot(
             mode="markers",
             name=f"{leverage}x Knockout",
             marker=dict(color=st_darker_blue, symbol="square", opacity=opacities_ko),
-        )
+        ),
+        row=1,
+        col=2,
     )
     # add derivatives zero return line
     fig.add_shape(
@@ -507,6 +549,8 @@ def update_derivates_calibration_plot(
             width=2,
             dash="dash",
         ),
+        row=1,
+        col=2,
     )
     # add underlying zero returns line
     fig.add_shape(
@@ -522,6 +566,16 @@ def update_derivates_calibration_plot(
             width=2,
             dash="dash",
         ),
+        row=1,
+        col=2,
+    )
+
+    fig.update_xaxes(
+        title="Underlying Returns [%]",
+        title_font=dict(color=st_green),
+        hoverformat=".2f",
+        row=1,
+        col=2,
     )
 
     fig.update_layout(
@@ -532,11 +586,6 @@ def update_derivates_calibration_plot(
         yaxis=dict(
             title=f"{leverage}x Factor and Knockout Returns [%]",
             title_font=dict(color=st_darker_blue),
-            hoverformat=".2f",
-        ),
-        xaxis=dict(
-            title="Underlying Returns [%]",
-            title_font=dict(color=st_green),
             hoverformat=".2f",
         ),
     )
