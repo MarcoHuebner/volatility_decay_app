@@ -11,6 +11,7 @@ import plotly.graph_objects as go
 import streamlit as st
 import yfinance
 from arch import arch_model
+from prophet import Prophet
 from tqdm import tqdm
 
 from src import constants
@@ -365,6 +366,39 @@ def empirical_var(data: pd.Series, alpha: float) -> float:
 
     # calculate the VaR
     return np.quantile(daily_returns, alpha)
+
+
+@st.cache_data(ttl=1800, show_spinner=False)
+def get_prophet_forecast(price: pd.Series) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Fit two Prophet models to the price data for different lookback windows
+    and forecast the next days of price development.
+
+    :param price: The price data to fit the Prophet models to.
+    :return: tuple, two forecast dataframes
+    """
+    # initialize two Prophet model
+    model_1, model_2 = Prophet(), Prophet()
+    # fit the models to the price data
+    model_1.fit(pd.DataFrame({"ds": price.index.tz_localize(None), "y": price.values}))
+    # repeat the fit but remove the last 5 days to compare the forecasts
+    model_2.fit(
+        pd.DataFrame({"ds": price.index[:-5].tz_localize(None), "y": price.values[:-5]})
+    )
+
+    # initialize the future dataframes
+    future_1 = model_1.make_future_dataframe(periods=10)
+    future_2 = model_2.make_future_dataframe(periods=15)
+
+    # forecast the future data
+    forecast_1 = model_1.predict(future_1)[["ds", "yhat", "yhat_lower", "yhat_upper"]]
+    forecast_2 = model_2.predict(future_2)[["ds", "yhat", "yhat_lower", "yhat_upper"]]
+
+    # add the timezone back to the "ds" column
+    forecast_1["ds"] = forecast_1["ds"].dt.tz_localize("Etc/GMT+4")
+    forecast_2["ds"] = forecast_2["ds"].dt.tz_localize("Etc/GMT+4")
+
+    return forecast_1, forecast_2
 
 
 # define yfinance functions

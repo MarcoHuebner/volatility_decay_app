@@ -13,6 +13,7 @@ from plotly.subplots import make_subplots
 from src import constants
 from src.utils import (
     fetch_ticker_data,
+    get_prophet_forecast,
     kelly_crit,
     kelly_leverage,
     performance_cumprod,
@@ -29,6 +30,54 @@ st_dark_blue = "#0068c9"
 st_darker_blue = "#0054a3"
 st_red = "#ff2b2b"
 st_green = "#21c354"
+
+
+def forecast_band_plot(
+    fig: go.Figure, forecast: pd.DataFrame, color: str, name: str
+) -> go.Figure:
+    # add lower bound of forecast
+    fig.add_trace(
+        go.Scatter(
+            x=forecast["ds"],
+            y=forecast["yhat_lower"],
+            mode="lines",
+            name="Lower Bound",
+            line=dict(color=color),
+            opacity=0.5,
+            visible="legendonly",
+            showlegend=False,
+            legendgroup=name,
+        )
+    )
+    # add upper bound of forecast
+    fig.add_trace(
+        go.Scatter(
+            x=forecast["ds"],
+            y=forecast["yhat_upper"],
+            mode="lines",
+            name="Upper Bound",
+            line=dict(color=color),
+            fill="tonexty",
+            opacity=0.5,
+            visible="legendonly",
+            showlegend=False,
+            legendgroup=name,
+        )
+    )
+    # add forecast
+    fig.add_trace(
+        go.Scatter(
+            x=forecast["ds"],
+            y=forecast["yhat"],
+            mode="lines",
+            name=name,
+            visible="legendonly",
+            line=dict(color=color),
+            legendgroup=name,
+        )
+    )
+
+    return fig
 
 
 # define the ticker price data plot
@@ -50,6 +99,9 @@ def update_ticker_plot(ticker: str, risk_free_rate_ticker: float) -> go.Figure:
     # get earning dates if not None (e.g. for indices)
     if result_dict["earnings"] is not None:
         earnings = result_dict["earnings"]["Reported EPS"]
+    # get prophet forecast
+    forecast_current, forecast_old = get_prophet_forecast(price)
+
     # add price line
     fig.add_trace(
         go.Scatter(
@@ -60,6 +112,9 @@ def update_ticker_plot(ticker: str, risk_free_rate_ticker: float) -> go.Figure:
             line=dict(color=st_blue),
         )
     )
+    # add forecast with uncertainty bands
+    fig = forecast_band_plot(fig, forecast_current, st_darker_blue, "Current Forecast")
+    fig = forecast_band_plot(fig, forecast_old, st_dark_blue, "Previous Forecast")
     # add 50-day moving average
     fig.add_trace(
         go.Scatter(
@@ -130,7 +185,6 @@ def update_ticker_plot(ticker: str, risk_free_rate_ticker: float) -> go.Figure:
     )
     if result_dict["earnings"] is not None:
         # add earnings dates
-        print(earnings)
         fig = plot_earnings_dates(earnings, price, fig)
 
     # calculate the Kelly Criterion with maximum of the three volatilities
@@ -279,8 +333,8 @@ def get_derivatives_data(
         # calculate win ratios and reward ratios
         win_ratio_ko = len(pos_returns_ko) / max(len(returns_ko), 1) * 100
         win_ratio_f = len(pos_returns_f) / max(len(returns_lev), 1) * 100
-        reward_ko = avg_win_ko / abs(avg_loss_ko)
-        reward_f = avg_win_f / abs(avg_loss_f)
+        reward_ko = avg_win_ko / max(abs(avg_loss_ko), 0.001)
+        reward_f = avg_win_f / max(abs(avg_loss_f), 0.001)
 
     # add returns to the return dictionary
     data_dict["returns_1x"] = returns_1x
@@ -328,6 +382,9 @@ def update_derivatives_performance_plot(
     opacities_lev = data_dict["opacities_lev"]
     opacities_ko = data_dict["opacities_ko"]
 
+    # get prophet forecast
+    forecast_current, forecast_old = get_prophet_forecast(price)
+
     # add price line
     fig.add_trace(
         go.Scatter(
@@ -338,9 +395,9 @@ def update_derivatives_performance_plot(
             line=dict(color=st_blue),
         )
     )
-    if earnings is not None:
-        # add earnings dates
-        fig = plot_earnings_dates(earnings, price, fig)
+    # add forecast with uncertainty bands
+    fig = forecast_band_plot(fig, forecast_current, st_darker_blue, "Current Forecast")
+    fig = forecast_band_plot(fig, forecast_old, st_dark_blue, "Previous Forecast")
     # add unleveraged returns
     fig.add_trace(
         go.Scatter(
@@ -432,6 +489,9 @@ def update_derivatives_performance_plot(
             showlegend=False,
         )
     )
+    if earnings is not None:
+        # add earnings dates
+        fig = plot_earnings_dates(earnings, price, fig)
 
     # update layout
     fig.update_layout(

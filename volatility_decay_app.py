@@ -11,10 +11,11 @@ describing the quadratic behaviour:
 - [(Detailed) Journal Article, also mentioned in the Blogpost](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=1664823)
 
 requirements.txt:
-plotly
-numpy
-streamlit
 ipywidgets>=7.0.0
+numpy
+plotly
+prophet
+streamlit
 
 """
 
