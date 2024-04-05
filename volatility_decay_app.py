@@ -18,582 +18,22 @@ ipywidgets>=7.0.0
 
 """
 
-import numpy as np
-import plotly.graph_objects as go
 import streamlit as st
 
-from utils import (
-    download_universe,
-    empirical_annualized_volatility,
-    fetch_ticker_data,
-    kelly_leverage,
-    kelly_stock_universe,
-    leveraged_return_mesh,
-    performance_cumprod,
-    plot_earnings_dates,
-    simplified_knockout,
-    simplified_lev_factor,
-    xaxis_slider,
+from src.investments import update_derivatives_performance_plot, update_ticker_plot
+from src.kelly_theory import (
+    ann_return,
+    ann_risk_free,
+    ann_vol,
+    exp_r,
+    lev_r,
+    libor,
+    update_kelly_plot,
+    update_plot,
+    update_result,
 )
-
-# define display functions
-ann_return = 0.037 * 252
-ann_risk_free = 0.005 * 252
-ann_vol = 1.2 * np.sqrt(252)
-# define heatmap marginals (-50% - 50% underlying CAGR, 0-50% annualized volatility)
-cagr_f_underlying = np.linspace(-20, 60, 161, endpoint=True)
-volatility_f_undr = np.linspace(0.5, 50, 100, endpoint=True)
-
-
-def kelly_crit(
-    yearly_er: float, yearly_risk_free: float, yearly_volatility: float
-) -> float:
-    # calculate the Kelly Criterion
-    # NOTE: the factor of 100 corrects for the percentage values
-    assert np.all(yearly_volatility > 0)
-    return 100 * (yearly_er - yearly_risk_free) / yearly_volatility**2
-
-
-def update_result(
-    yearly_er: float, yearly_risk_free: float, yearly_volatility: float
-) -> str:
-    # display the Kelly Criterion
-    kelly_f = kelly_crit(yearly_er, yearly_risk_free, yearly_volatility)
-    return f"#### Ideal Market Exposure: {kelly_f*100:.0f}% ({kelly_f:.2f} leverage factor)"
-
-
-def kelly_crit_mesh(
-    yearly_er: float, yearly_risk_free: float, yearly_volatility: float
-) -> np.ndarray:
-    # calculate the Kelly Criterion meshed for different underlying CAGR and volatility
-    mesh = np.zeros((len(yearly_volatility), len(yearly_er)))
-    for i, vol in enumerate(yearly_volatility):
-        for j, cagr in enumerate(yearly_er):
-            # reflect on volatility axis due to the way, plotly sets-up heatmaps
-            # also, rescale percentage values, as otherwise not readable in the sliders
-            mesh[i, j] = kelly_crit(cagr, yearly_risk_free, vol)
-    return np.round(mesh, 2)
-
-
-# define parameters (except for leverage all in percent)
-lev_r = 2.0
-exp_r = 0.6
-libor = 0.5
-# define heatmap marginals (-50% - 50% underlying CAGR, 0-50% annualized volatility)
-cagr_underlying = np.linspace(-50, 50, 201, endpoint=True)
-volatility_undr = np.linspace(0.0, 50, 101, endpoint=True)
-
-# define the data
-zmin, zmax = -15, 20
-data = [
-    go.Heatmap(
-        x=cagr_underlying,
-        y=volatility_undr,
-        z=leveraged_return_mesh(lev_r, cagr_underlying, exp_r, libor, volatility_undr),
-        zmax=zmax,
-        zmid=0,
-        zmin=zmin,
-        colorscale="RdBu",
-        colorbar=dict(
-            title="Outperformance LETF over Unleveraged ETF [%]", titleside="right"
-        ),
-    )
-]
-data_contour = [
-    go.Contour(
-        x=cagr_underlying,
-        y=volatility_undr,
-        z=leveraged_return_mesh(lev_r, cagr_underlying, exp_r, libor, volatility_undr),
-        zmax=zmax,
-        zmid=0,
-        zmin=zmin,
-        colorscale="RdBu",
-        colorbar=dict(
-            title="Outperformance LETF over Unleveraged ETF [%]", titleside="right"
-        ),
-    )
-]
-
-
-def update_plot(
-    data_source: str, leverage: float, TER: float, LIBOR: float
-) -> go.Figure:
-    # rescale the leverage factor
-    leverage /= 100
-    # update data
-    if data_source == "Heatmap":
-        fig = go.FigureWidget(data=data)
-    else:
-        fig = go.FigureWidget(data=data_contour)
-    # write data to figure
-    fig.data[0].z = leveraged_return_mesh(
-        leverage, cagr_underlying, TER, LIBOR, volatility_undr
-    )
-    # update layout
-    fig.update_layout(
-        title="Gain of the LETF over the Unleveraged ETF",
-        title_font=dict(size=24),
-        hovermode="x unified",
-        xaxis_title="Underlying: Expected Yearly Return [%]",
-        yaxis_title="Underlying: Annualized Volatility [%]",
-    )
-    fig.update_traces(
-        hovertemplate="Outperformance [%]: %{z:.1f}<br>Underlying: CAGR [%]: %{x}<br>Underlying: Ann. Vol. [%]: %{y}<extra></extra>"
-    )
-
-    return fig
-
-
-# define the Kelly criterion data
-zmin_f, zmax_f = 0, 10
-data_f = [
-    go.Heatmap(
-        x=cagr_f_underlying,
-        y=volatility_f_undr,
-        z=kelly_crit_mesh(cagr_f_underlying, ann_risk_free, volatility_f_undr),
-        zmin=zmin_f,
-        zmid=1,
-        zmax=zmax_f,
-        colorscale="RdylGn_r",
-        colorbar=dict(title="Ideal Leverage Factor", titleside="right"),
-    )
-]
-data_f_contour = [
-    go.Contour(
-        x=cagr_f_underlying,
-        y=volatility_f_undr,
-        z=kelly_crit_mesh(cagr_f_underlying, ann_risk_free, volatility_f_undr),
-        zmin=zmin_f,
-        zmid=1,
-        zmax=zmax_f,
-        colorscale="RdylGn_r",
-        colorbar=dict(title="Ideal Leverage Factor", titleside="right"),
-    )
-]
-
-
-def update_kelly_plot(data_source: str, risk_free_rate: float) -> go.Figure:
-    # update data
-    if data_source == "Heatmap":
-        fig = go.FigureWidget(data=data_f)
-    else:
-        fig = go.FigureWidget(data=data_f_contour)
-    # write data to figure
-    fig.data[0].z = kelly_crit_mesh(
-        cagr_f_underlying, risk_free_rate, volatility_f_undr
-    )
-    # update layout
-    fig.update_layout(
-        title="Ideal Leverage Factor According to Kelly Criterion",
-        title_font=dict(size=24),
-        hovermode="x unified",
-        xaxis_title="Underlying: Expected Yearly Return [%]",
-        yaxis_title="Underlying: Annualized Volatility [%]",
-    )
-    fig.update_traces(
-        hovertemplate="Leverage Factor: %{z}<br>Underlying: CAGR [%]: %{x}<br>Underlying: Ann. Vol. [%]: %{y}<extra></extra>"
-    )
-    # set initial zoom
-    fig.update_xaxes(range=[-5, 15])
-    fig.update_yaxes(range=[0.5, 25])
-
-    return fig
-
-
-# define the ticker price data plot
-def update_ticker_plot(ticker: str, risk_free_rate_ticker: float) -> go.Figure:
-    # create the plotly figure
-    fig = go.Figure()
-    # define colours, loosely related to the streamlit default colours
-    # https://discuss.streamlit.io/t/access-streamlit-default-color-palette/35737
-    st_blue = "#83c9ff"
-    st_dark_blue = "#0068c9"
-    st_darker_blue = "#0054a3"
-    st_red = "#ff2b2b"
-    st_light_red = "#ff8c8c"
-    st_green = "#21c354"
-
-    # get data
-    result_dict = fetch_ticker_data(ticker)
-    price = result_dict["price"].tail(252)
-    # get earning dates if not None (e.g. for indices)
-    if result_dict["earnings"] is not None:
-        earnings = result_dict["earnings"]["Reported EPS"]
-    # add price line
-    fig.add_trace(
-        go.Scatter(
-            x=price.index,
-            y=price,
-            mode="lines",
-            name="Closing Price",
-            line=dict(color=st_blue),
-        )
-    )
-    # add 50-day moving average
-    fig.add_trace(
-        go.Scatter(
-            x=result_dict["ma50"].index,
-            y=result_dict["ma50"],
-            name="50 Day MA",
-            line=dict(color=st_dark_blue, dash="dash"),
-        )
-    )
-    # add 200-day moving average
-    fig.add_trace(
-        go.Scatter(
-            x=result_dict["ma200"].index,
-            y=result_dict["ma200"],
-            name="200 Day MA",
-            line=dict(color=st_darker_blue, dash="dot"),
-        )
-    )
-    # add annualized volatility
-    fig.add_trace(
-        go.Scatter(
-            x=result_dict["ann_volatility"].index,
-            y=result_dict["ann_volatility"],
-            mode="lines",
-            name="Annualized Volatility",
-            yaxis="y2",
-            line=dict(color=st_red),
-        )
-    )
-    # add 30-d volatility (VIX for S&P)
-    fig.add_trace(
-        go.Scatter(
-            x=result_dict["30_d_volatility_vix"].index,
-            y=result_dict["30_d_volatility_vix"],
-            mode="lines",
-            name="30 Day Volatility Estimate",
-            yaxis="y2",
-            visible="legendonly",
-            line=dict(color=st_red, dash="dot"),
-        )
-    )
-    # add garch volatility
-    fig.add_trace(
-        go.Scatter(
-            x=[result_dict["ann_volatility"].index[0]],
-            y=[result_dict["ann_volatility"].min()],
-            mode="text",
-            name="GARCH Forecast Volatility",
-            text=["Discontinued, see source code."],
-            textfont=dict(size=10, color=st_light_red),
-            textposition="top right",
-            yaxis="y2",
-            visible="legendonly",
-        )
-    )
-    # add daily percentage change
-    pct_change = result_dict["price"].pct_change() * 100
-    fig.add_trace(
-        go.Scatter(
-            x=price.index,
-            y=pct_change.iloc[-252:],
-            mode="lines",
-            name="Daily Returns",
-            yaxis="y3",
-            visible="legendonly",
-            line=dict(color=st_green),
-        )
-    )
-    if result_dict["earnings"] is not None:
-        # add earnings dates
-        fig = plot_earnings_dates(earnings, price, fig)
-
-    # calculate the Kelly Criterion with maximum of the three volatilities
-    average_vol_30d = result_dict["30_d_volatility_vix"].iloc[-52:].mean()
-    average_daily_return = pct_change.iloc[-252:].mean()
-    max_vol = max(
-        result_dict["ann_volatility"].iloc[-1],
-        # result_dict["garch_volatility"].iloc[-1],
-        average_vol_30d,
-    )
-    # add a safety margin of -2% ann. return and +3% ann. volatility
-    safety_return = -2
-    safety_vol = 3
-    kelly = kelly_crit(
-        average_daily_return * 252 + safety_return,
-        risk_free_rate_ticker,
-        max_vol + safety_vol,
-    )
-    # calculate the leverage factor for 20% volatility
-    lev_20 = 20 / result_dict["ann_volatility"].iloc[-1]
-    # calculate the Percentage at Risk (PaR)
-    par_5 = np.percentile(pct_change.dropna(), 5)
-    par_1 = np.percentile(pct_change.dropna(), 1)
-
-    # update layout
-    fig.update_layout(
-        title=f"<span style='font-size: 24px;'>Current Price and"
-        + f" Volatility of {result_dict['name']}</span><br>"
-        + f"<span style='font-size: 16px;'>Kelly Leverage Factor: {kelly:.2f}"
-        + f" - Leverage @20% Volatility: {lev_20:.2f}"
-        + f" - Current 1%/5% PaR (past 2y): {par_1:.2f}%/{par_5:.2f}%</span>",
-        hovermode="x unified",
-        yaxis=dict(
-            title="Closing Prices", title_font=dict(color=st_blue), hoverformat=".2f"
-        ),
-        yaxis2=dict(
-            title="Annualized Volatility [%]",
-            side="right",
-            overlaying="y",
-            title_font=dict(color=st_red),
-            hoverformat=".2f",
-        ),
-        yaxis3=dict(
-            title="Daily Returns [%]",
-            side="right",
-            overlaying="y",
-            position=0.96,
-            title_font=dict(color=st_green),
-            hoverformat=".2f",
-        ),
-        xaxis=xaxis_slider(price),
-    )
-    # update x width
-    fig.update_xaxes(
-        domain=[0.0, 0.89],
-    )
-
-    return fig
-
-
-# define the past leverage and knock out returns plot
-def update_derivatives_performance_plot(
-    ticker: str,
-    risk_free_rate_ticker: float,
-    leverage: float,
-    expenses: float,
-    rel_transact_costs: float,
-    time_window: int,
-    holding_period: int,
-) -> go.Figure:
-    # create the plotly figure
-    fig = go.Figure()
-    # define colours, loosely related to the streamlit default colours
-    # https://discuss.streamlit.io/t/access-streamlit-default-color-palette/35737
-    st_blue = "#83c9ff"
-    st_dark_blue = "#0068c9"
-    st_darker_blue = "#0054a3"
-    st_red = "#ff2b2b"
-    st_green = "#21c354"
-
-    # get data
-    result_dict = fetch_ticker_data(ticker)
-    price = result_dict["price"].tail(252)
-    pct_change = result_dict["price"].pct_change()
-    # get earning dates if not None (e.g. for indices)
-    if result_dict["earnings"] is not None:
-        earnings = result_dict["earnings"]["Reported EPS"]
-
-    # how have derivatives bought with kelly criterion > 5 performed in the past?
-    # show results of holding_period day intervals
-    kelly_crit = kelly_leverage(
-        pct_change, risk_free_rate_ticker, time_window=time_window
-    ).tail(252)
-    pct_change = pct_change.tail(252)
-    # get days on which the kelly criterion was > 5
-    dates_iloc = np.where(kelly_crit > 5)[0]
-    if dates_iloc.size == 0:
-        # set to 0 if no signals
-        returns_1x, returns_lev, returns_ko = [0], [0], [0]
-        win_ratio_ko, win_ratio_f = 0, 0
-        reward_ko, reward_f = 0, 0
-    else:
-        # get all possible holding_period day interval returns
-        returns_1x = [
-            performance_cumprod(pct_change.iloc[date : date + holding_period])
-            for date in dates_iloc
-        ]
-        returns_lev = [
-            performance_cumprod(
-                simplified_lev_factor(
-                    pct_change.iloc[date : date + holding_period],
-                    expenses,
-                    rel_transact_costs,
-                    holding_period,
-                    leverage,
-                )
-            )
-            for date in dates_iloc
-        ]
-        returns_ko = [
-            performance_cumprod(
-                # assume that the knockout is bought during the day for
-                # the closing price of the previous day
-                simplified_knockout(
-                    price.iloc[date - 1 : date + holding_period],
-                    expenses,
-                    rel_transact_costs,
-                    holding_period,
-                    leverage,
-                )
-            )
-            for date in dates_iloc
-        ]
-        # Pre-compute quantities to simplify the code
-        pos_returns_ko = [r for r in returns_ko if r > 0]
-        avg_win_ko = sum(pos_returns_ko) / len(pos_returns_ko)
-        neg_returns_ko = [r for r in returns_ko if r <= 0]
-        avg_loss_ko = sum(neg_returns_ko) / len(neg_returns_ko)
-        pos_returns_f = [r for r in returns_lev if r > 0]
-        avg_win_f = sum(pos_returns_f) / len(pos_returns_f)
-        neg_returns_f = [r for r in returns_lev if r <= 0]
-        avg_loss_f = sum(neg_returns_f) / len(neg_returns_f)
-        # Calculate win ratios and reward ratios
-        win_ratio_ko = len(pos_returns_ko) / len(returns_ko) * 100
-        win_ratio_f = len(pos_returns_f) / len(returns_lev) * 100
-        reward_ko = avg_win_ko / abs(avg_loss_ko)
-        reward_f = avg_win_f / abs(avg_loss_f)
-    # Calculate opacities based on comparison of returns
-    opacities_lev = [
-        0.3 if lev <= ko else 1.0 for lev, ko in zip(returns_lev, returns_ko)
-    ]
-    opacities_ko = [
-        0.3 if ko < lev else 1.0 for lev, ko in zip(returns_lev, returns_ko)
-    ]
-
-    # add price line
-    fig.add_trace(
-        go.Scatter(
-            x=price.index,
-            y=price,
-            mode="lines",
-            name="Closing Price",
-            line=dict(color=st_blue),
-        )
-    )
-    if result_dict["earnings"] is not None:
-        # add earnings dates
-        fig = plot_earnings_dates(earnings, price, fig)
-    # add unleveraged returns
-    fig.add_trace(
-        go.Scatter(
-            x=price.index[dates_iloc],
-            y=returns_1x,
-            mode="markers",
-            name="Underlying",
-            yaxis="y2",
-            marker=dict(color=st_green, symbol="circle"),
-        )
-    )
-    # add leveraged factor returns
-    fig.add_trace(
-        go.Scatter(
-            x=price.index[dates_iloc],
-            y=returns_lev,
-            mode="markers",
-            name=f"{leverage}x Factor",
-            yaxis="y2",
-            marker=dict(
-                color=st_dark_blue, symbol="triangle-up", opacity=opacities_lev
-            ),
-        )
-    )
-    # add knockout returns
-    fig.add_trace(
-        go.Scatter(
-            x=price.index[dates_iloc],
-            y=returns_ko,
-            mode="markers",
-            name=f"{leverage}x Knockout",
-            yaxis="y2",
-            marker=dict(color=st_darker_blue, symbol="square", opacity=opacities_ko),
-        )
-    )
-    # add zero line
-    fig.add_shape(
-        type="line",
-        xref="x",
-        yref="y2",
-        x0=price.index[0],
-        y0=0,
-        x1=price.index[-1],
-        y1=0,
-        line=dict(
-            color=st_darker_blue,
-            width=2,
-            dash="dash",
-        ),
-    )
-    # add past holding_period day cut-off line
-    fig.add_shape(
-        type="line",
-        xref="x",
-        yref="y2",
-        x0=price.index[-holding_period],
-        y0=min(min(returns_1x), min(returns_lev), min(returns_ko)),
-        x1=price.index[-holding_period],
-        y1=max(max(returns_1x), max(returns_lev), max(returns_ko)),
-        line=dict(
-            color=st_darker_blue,
-            width=2,
-            dash="dash",
-        ),
-    )
-    # add leverage factor
-    fig.add_trace(
-        go.Scatter(
-            x=kelly_crit.index,
-            y=kelly_crit,
-            mode="lines",
-            name="Kelly Leverage Factor",
-            yaxis="y3",
-            line=dict(color=st_red),
-            visible="legendonly",
-            legendgroup="group1",
-        )
-    )
-    # add typical leverage cutoff
-    fig.add_trace(
-        go.Scatter(
-            x=[kelly_crit.index.min(), kelly_crit.index.max()],
-            y=[5, 5],
-            mode="lines",
-            yaxis="y3",
-            line=dict(color=st_red, dash="dash"),
-            visible="legendonly",
-            legendgroup="group1",
-            showlegend=False,
-        )
-    )
-
-    # update layout
-    fig.update_layout(
-        title="<span style='font-size: 24px;'>How Derivatives of "
-        + f"{result_dict['name']} Performed</span><br>"
-        + "<span style='font-size: 16px;'>Given a 60-day Rolling Kelly "
-        + "Leverage Factor as Signal - Amount of Signals in the Past 252 "
-        + f"Trading Days: {len(dates_iloc)}</span>",
-        hovermode="x unified",
-        yaxis=dict(
-            title="Closing Prices", title_font=dict(color=st_blue), hoverformat=".2f"
-        ),
-        yaxis2=dict(
-            title=f"Returns @ Buy Date + {holding_period} Days [%]",
-            side="right",
-            overlaying="y",
-            title_font=dict(color=st_dark_blue),
-            hoverformat=".2f",
-        ),
-        yaxis3=dict(
-            title="Proposed Leverage Factor",
-            side="right",
-            overlaying="y",
-            position=0.96,
-            title_font=dict(color=st_red),
-            hoverformat=".2f",
-        ),
-        xaxis=xaxis_slider(price),
-    )
-    # update x width
-    fig.update_xaxes(
-        domain=[0.0, 0.89],
-    )
-
-    return fig, win_ratio_ko, win_ratio_f, reward_ko, reward_f
-
+from src.stock_screener import adr_selection, kelly_selection, positive_return_selection, volatility_selection
+from src.utils import download_universe, empirical_annualized_volatility
 
 if __name__ == "__main__":
     # define the layout
@@ -878,11 +318,13 @@ if __name__ == "__main__":
             filtered_cols = data["Volume"].columns
 
         # Display the past 60 days of the adjusted close data
-        n_days = 60
-        adj_close_data = data.xs("Adj Close", level=0, axis=1).iloc[-(n_days + 1) :]
+        n_days_60 = 60
+        adj_close_data = data.xs("Adj Close", level=0, axis=1).iloc[-(n_days_60 + 1) :]
         adj_close_data = adj_close_data[filtered_cols]
         n_assets = adj_close_data.shape[1]
-        st.write(f"### Past {n_days} Days of Adjusted Close Data for {n_assets} Assets")
+        st.write(
+            f"### Past {n_days_60} Days of Adjusted Close Data for {n_assets} Assets"
+        )
         st.dataframe(data=adj_close_data.tail(10))
 
         # Header for the stock universe indicators
@@ -907,53 +349,44 @@ if __name__ == "__main__":
         )
 
         # Calculate the Kelly leverage factor for the stock universe for the past n_days
-        leverage = kelly_stock_universe(adj_close_data, risk_free_rate_u, n_days)
-        # Apply filters to the leverage factor
-        leverage_gt_10 = leverage[leverage > 10]
-        largest_20 = leverage_gt_10.nlargest(20).round(2)
-        largest_20.name = "Kelly"
-        # Repeat for a different time window
-        leverage_30 = kelly_stock_universe(
-            adj_close_data.iloc[-(30 + 1) :], risk_free_rate_u, 30
+        lev_60, lev_gt_10_60, largest_20_60 = kelly_selection(
+            adj_close_data, risk_free_rate_u, n_days_60
         )
-        largest_gt_10_30 = leverage_30[leverage_30 > 10]
-        largest_20_30 = leverage_30.nlargest(20).round(2)
-        largest_20_30.name = "Kelly"
+        # Repeat for a different time window
+        n_days_30 = 30
+        lev_30, lev_gt_10_30, largest_20_30 = kelly_selection(
+            adj_close_data, risk_free_rate_u, n_days_30
+        )
 
         # Calculate the average daily range for the stock universe
-        high_data = data.xs("High", level=0, axis=1).iloc[-n_days:]
+        high_data = data.xs("High", level=0, axis=1).iloc[-n_days_60:]
         high_data = high_data[filtered_cols]
-        low_data = data.xs("Low", level=0, axis=1).iloc[-n_days:]
+        low_data = data.xs("Low", level=0, axis=1).iloc[-n_days_60:]
         low_data = low_data[filtered_cols]
         # Calculate the average daily range for the past n_days
-        daily_range = (high_data / low_data).mean()
-        average_daily_range = (100 * (daily_range - 1)).round(2)[largest_20.index]
-        average_daily_range.name = "ADR [%]"
-        # Repeat for a different time window
-        daily_range_30 = (high_data.iloc[-30:] / low_data.iloc[-30:]).mean()
-        average_daily_range_30 = (100 * (daily_range_30 - 1)).round(2)[
-            largest_20_30.index
-        ]
-        average_daily_range_30.name = "ADR [%]"
+        dr_60, adr_60 = adr_selection(high_data, low_data, n_days_60)
+        dr_30, adr_30 = adr_selection(
+            high_data.iloc[-n_days_30:], low_data.iloc[-n_days_30:], n_days_30
+        )
 
         # Create columns for the indicators
         col1, col2, col3, col4 = st.columns(4)
 
         # Use the columns for display
         col1.write(
-            f"Kelly leverage factor > 10 in the past {n_days} days:"
-            f" {len(leverage_gt_10)} Stocks. Top 20:"
+            f"Kelly leverage factor > 10 in the past {n_days_60} days:"
+            f" {len(lev_gt_10_60)} Stocks. Top 20:"
         )
-        col1.dataframe(data=largest_20)
+        col1.dataframe(data=largest_20_60)
         col2.write(
-            f"Kelly leverage factor > 10 in the past 30 days:"
-            f" {len(largest_gt_10_30)} Stocks. Top 20:"
+            f"Kelly leverage factor > 10 in the past {n_days_30} days:"
+            f" {len(lev_gt_10_30)} Stocks. Top 20:"
         )
         col2.dataframe(data=largest_20_30)
-        col3.write(f"Average daily range [%] in the past {n_days} days:")
-        col3.dataframe(data=average_daily_range)
-        col4.write(f"Average daily range [%] in the past 30 days:")
-        col4.dataframe(data=average_daily_range_30)
+        col3.write(f"Average daily range [%] in the past {n_days_60} days:")
+        col3.dataframe(data=adr_60[largest_20_60.index])
+        col4.write(f"Average daily range [%] in the past {n_days_30} days:")
+        col4.dataframe(data=adr_30[largest_20_30.index])
 
         st.markdown(
             """
@@ -964,34 +397,25 @@ if __name__ == "__main__":
         )
 
         # Filter for a positive trend in the past n_days
-        top_adr_returns = performance_cumprod(adj_close_data.pct_change()).round(2)
-        top_adr_returns.name = "Return [%]"
-        # Filter for the largest ADR in the past n_days with positive trend
-        top_adr_item = top_adr_returns.index[top_adr_returns > 10]
-        top_adr = (100 * (daily_range[top_adr_item] - 1)).nlargest(20).round(2)
-        top_adr.name = "ADR [%]"
-        # Repeat for a different time window
-        top_adr_30_returns = performance_cumprod(
-            adj_close_data.iloc[-31:].pct_change()
-        ).round(2)
-        top_adr_30_returns.name = "Return [%]"
-        # Filter for the largest ADR in the past 30 days with positive trend
-        top_adr_30_item = top_adr_30_returns.index[top_adr_30_returns > 5]
-        top_adr_30 = (100 * (daily_range_30[top_adr_30_item] - 1)).nlargest(20).round(2)
+        ret_60, ret_10_60 = positive_return_selection(adj_close_data, n_days_60)
+        top_adr_60 = adr_60[ret_10_60].nlargest(20).round(2)
+        top_adr_60.name = "ADR [%]"
+        ret_30, ret_10_30 = positive_return_selection(adj_close_data, n_days_30)
+        top_adr_30 = adr_30[ret_10_30].nlargest(20).round(2)
         top_adr_30.name = "ADR [%]"
 
         # Create columns for the indicators
         col1, col2, col3, col4 = st.columns(4)
 
         # Use the columns for display
-        col1.write(f"Top 20 ADR stocks in the past {n_days} days:")
-        col1.dataframe(data=top_adr)
-        col2.write("Top 20 ADR stocks in the past 30 days:")
+        col1.write(f"Top 20 ADR stocks in the past {n_days_60} days:")
+        col1.dataframe(data=top_adr_60)
+        col2.write(f"Top 20 ADR stocks in the past {n_days_30} days:")
         col2.dataframe(data=top_adr_30)
-        col3.write(f"Return [%] past {n_days} days:")
-        col3.dataframe(data=top_adr_returns[top_adr.index])
-        col4.write(f"Return [%] in the past 30 days:")
-        col4.dataframe(data=top_adr_30_returns[top_adr_30.index])
+        col3.write(f"Return [%] past {n_days_60} days:")
+        col3.dataframe(data=ret_60[top_adr_60.index])
+        col4.write(f"Return [%] in the past {n_days_30} days:")
+        col4.dataframe(data=ret_30[top_adr_30.index])
 
         st.markdown(
             """
@@ -1002,11 +426,19 @@ if __name__ == "__main__":
         )
         # Slider for the Kelly filter
         kelly_filter = st.slider(
-            "Min. Kelly Leverage [%]", min_value=2.5, max_value=30.0, value=5.0, step=2.5
+            "Min. Kelly Leverage [%]",
+            min_value=2.5,
+            max_value=30.0,
+            value=5.0,
+            step=2.5,
         )
         # Slider for the ADR filter
         adr_filter = st.slider(
-            "Min. Average Daily Range (ADR) [%]", min_value=0.0, max_value=10.0, value=1.5, step=0.5
+            "Min. Average Daily Range (ADR) [%]",
+            min_value=0.0,
+            max_value=10.0,
+            value=1.5,
+            step=0.5,
         )
         # Slider for the volatility filter
         volatility_filter = st.slider(
@@ -1018,25 +450,15 @@ if __name__ == "__main__":
         )
 
         # Apply filters to the leverage factor
-        filter_lev_60 = leverage > kelly_filter
-        filter_lev_30 = leverage_30 > kelly_filter
+        filter_lev_60 = lev_60 > kelly_filter
+        filter_lev_30 = lev_30 > kelly_filter
         # Apply filters to the average daily range
-        adr_60 = (100 * (daily_range - 1)).round(2)
         filter_adr_60 = adr_60 > adr_filter
-        # average_daily_range.name = "ADR [%]"
-        # Repeat for a different time window
-        adr_30 = (100 * (daily_range_30 - 1)).round(2)
         filter_adr_30 = adr_30 > adr_filter
-        # top_adr_returns
         # Apply filters to the volatility
-        vol_60 = (
-            empirical_annualized_volatility(adj_close_data, window=60).iloc[-1].round(2)
-        )
+        vol_60 = volatility_selection(adj_close_data, n_days_60)
         filter_vol_60 = vol_60 < volatility_filter
-        # Repeat for a different time window
-        vol_30 = (
-            empirical_annualized_volatility(adj_close_data, window=30).iloc[-1].round(2)
-        )
+        vol_30 = volatility_selection(adj_close_data, n_days_30)
         filter_vol_30 = vol_30 < volatility_filter
 
         # Combine the filters
@@ -1046,26 +468,34 @@ if __name__ == "__main__":
         # Create new dataframes for the filtered stocks
         filtered_data_60 = adj_close_data.iloc[-1].T.round(2).to_frame()[combined_60]
         filtered_data_60.columns = ["Adj. Close"]
-        filtered_data_60["Adj. Close"] = filtered_data_60["Adj. Close"].astype('float64')
-        filtered_data_60["Kelly Leverage"] = leverage.round(2)[combined_60]
+        filtered_data_60["Adj. Close"] = filtered_data_60["Adj. Close"].astype(
+            "float64"
+        )
+        filtered_data_60["Kelly Leverage"] = lev_60.round(2)[combined_60]
         filtered_data_60["ADR [%]"] = adr_60[combined_60]
         filtered_data_60["Volatility [%]"] = vol_60[combined_60]
         filtered_data_30 = adj_close_data.iloc[-1].T.round(2).to_frame()[combined_30]
         filtered_data_30.columns = ["Adj. Close"]
-        filtered_data_30["Adj. Close"] = filtered_data_30["Adj. Close"].astype('float64')
-        filtered_data_30["Kelly Leverage"] = leverage_30.round(2)[combined_30]
+        filtered_data_30["Adj. Close"] = filtered_data_30["Adj. Close"].astype(
+            "float64"
+        )
+        filtered_data_30["Kelly Leverage"] = lev_30.round(2)[combined_30]
         filtered_data_30["ADR [%]"] = adr_30[combined_30]
         filtered_data_30["Volatility [%]"] = vol_30[combined_30]
-        
+
         # Sort the dataframes by the Kelly leverage
-        filtered_data_60 = filtered_data_60.sort_values(by="Kelly Leverage", ascending=False)
-        filtered_data_30 = filtered_data_30.sort_values(by="Kelly Leverage", ascending=False)
+        filtered_data_60 = filtered_data_60.sort_values(
+            by="Kelly Leverage", ascending=False
+        )
+        filtered_data_30 = filtered_data_30.sort_values(
+            by="Kelly Leverage", ascending=False
+        )
 
         # Create columns for the indicators
         col1, col2 = st.columns(2)
 
         # Use the columns for display
-        col1.write(f"Filtered stocks ({n_days} days): {len(filtered_data_60)}")
+        col1.write(f"Filtered stocks ({n_days_60} days): {len(filtered_data_60)}")
         col1.dataframe(data=filtered_data_60)
-        col2.write(f"Filtered stocks (30 days): {len(filtered_data_30)}")
+        col2.write(f"Filtered stocks ({n_days_30} days): {len(filtered_data_30)}")
         col2.dataframe(data=filtered_data_30)

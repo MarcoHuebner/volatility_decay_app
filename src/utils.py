@@ -172,6 +172,15 @@ def simplified_knockout(
     return pct_change
 
 
+def kelly_crit(
+    yearly_er: float, yearly_risk_free: float, yearly_volatility: float
+) -> float:
+    # calculate the Kelly Criterion for float inputs
+    # NOTE: the factor of 100 corrects for the percentage values
+    assert np.all(yearly_volatility > 0)
+    return 100 * (yearly_er - yearly_risk_free) / yearly_volatility**2
+
+
 def kelly_leverage(
     daily_returns: pd.Series,
     yearly_risk_free: float = 2.0,
@@ -451,3 +460,16 @@ def plot_earnings_dates(
         )
 
     return fig
+
+
+# TODO: Add automatic download of the universe every day (best: At night)
+"""def repeat_download_universe():
+    while True:
+        download_universe()
+        # Sleep for 24 hours +/- up to 15 minutes
+        time.sleep(24 * 3600 + random.randint(-15 * 60, 15 * 60))
+
+# Start the background thread
+threading.Thread(target=repeat_download_universe, daemon=True).start()
+
+download_universe()"""
