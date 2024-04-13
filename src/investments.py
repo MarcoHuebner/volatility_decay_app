@@ -41,7 +41,7 @@ def forecast_band_plot(
             x=forecast["ds"],
             y=forecast["yhat_lower"],
             mode="lines",
-            name="Lower Bound",
+            name="CI Lower Bound",
             line=dict(color=color),
             opacity=0.5,
             visible="legendonly",
@@ -55,7 +55,7 @@ def forecast_band_plot(
             x=forecast["ds"],
             y=forecast["yhat_upper"],
             mode="lines",
-            name="Upper Bound",
+            name="CI Upper Bound",
             line=dict(color=color),
             fill="tonexty",
             opacity=0.5,
@@ -253,6 +253,7 @@ def get_derivatives_data(
     rel_transact_costs: float,
     time_window: int,
     holding_period: int,
+    include_tax: bool,
 ) -> dict[str, pd.Series | list | float]:
     # get data of the underlying
     result_dict = fetch_ticker_data(ticker)
@@ -315,6 +316,16 @@ def get_derivatives_data(
             )
             for date in dates_iloc
         ]
+
+        if include_tax:
+            # define tax rate
+            tax = 0.25
+            solidary_tax = 0.01375
+            remaining_gain = 1 - (tax + solidary_tax)
+            # add tax on profits
+            returns_lev = [r if r < 0 else r * remaining_gain for r in returns_lev]
+            returns_ko = [r if r < 0 else r * remaining_gain for r in returns_ko]
+            returns_lev = [r if r < 0 else r * remaining_gain for r in returns_lev]
 
         # pre-compute quantities to simplify the code and catch division by zero
         def avg_return(returns: list[float]) -> float:

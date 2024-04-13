@@ -233,13 +233,17 @@ if __name__ == "__main__":
             update_ticker_plot(ticker_symbol, risk_free_rate_ticker),
             use_container_width=True,
         )
+        # Checkbox for tax
+        include_tax = st.checkbox(
+            "Include Taxes on Capital Gains (incl. 'Solidaritätszuschlag')", value=True
+        )
         # Slider for the expenses of the derivatives
         derivative_expenses = st.slider(
             "Yearly Expense Ratio of the Derivatives [%]",
-            min_value=0.0,
-            max_value=5.0,
+            min_value=1.0,
+            max_value=25.0,
             value=3.0,
-            step=0.25,
+            step=1.0,
         )
         # Slider for the transaction costs of the derivatives
         rel_transact_costs = st.slider(
@@ -247,7 +251,7 @@ if __name__ == "__main__":
             min_value=0.0,
             max_value=5.0,
             value=3.0,
-            step=0.25,
+            step=0.5,
         )
         # Slider for the Kelly leverage time window
         look_back_window = st.slider(
@@ -284,6 +288,7 @@ if __name__ == "__main__":
             rel_transact_costs,
             look_back_window,
             holding_period,
+            include_tax,
         )
         # Display aggregated statistics of the derivatives
         win_ratio_ko = data_dict["win_ratio_ko"]
