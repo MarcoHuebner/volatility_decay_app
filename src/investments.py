@@ -208,6 +208,15 @@ def update_ticker_plot(ticker: str, risk_free_rate_ticker: float) -> go.Figure:
     # calculate the Percentage at Risk (PaR)
     par_5 = np.percentile(pct_change.dropna(), 5)
     par_1 = np.percentile(pct_change.dropna(), 1)
+    # repeat for intra-day low prices
+    price = result_dict["price"]
+    low = result_dict["low"]
+    # calculate the daily percentage change of the low price to previous day close
+    pct_change_low = ((low - price.shift(1)) / price.shift(1)) * 100
+    par_5_low = np.percentile(pct_change_low.dropna(), 5)
+    par_1_low = np.percentile(pct_change_low.dropna(), 1)
+    # update the PaR with the lower values
+    par_5, par_1 = min(par_5, par_5_low), min(par_1, par_1_low)
 
     # update layout
     fig.update_layout(
@@ -257,10 +266,13 @@ def get_derivatives_data(
 ) -> dict[str, pd.Series | list | float]:
     # get data of the underlying
     result_dict = fetch_ticker_data(ticker)
-    price = result_dict["price"].tail(constants.trading_days)
-    low = result_dict["low"].tail(constants.trading_days)
-    pct_change = result_dict["price"].pct_change().dropna()
-    pct_change_low = (low - price).pct_change().dropna()
+    price = result_dict["price"]
+    low = result_dict["low"]
+    # calculate the daily percentage change of the price to previous day close
+    pct_change = price.pct_change().dropna()
+    # calculate the daily percentage change of the low price to previous day close
+    pct_change_low = ((low - price.shift(1)) / price.shift(1)).dropna()
+    low, price = low.tail(constants.trading_days), price.tail(constants.trading_days)
     # get earning dates if not None (e.g. for indices)
     if result_dict["earnings"] is not None:
         earnings = result_dict["earnings"]["Reported EPS"]
@@ -276,7 +288,7 @@ def get_derivatives_data(
         pct_change, risk_free_rate_ticker, time_window=time_window
     ).tail(constants.trading_days)
     pct_change = pct_change.tail(constants.trading_days)
-    pct_change_low = pct_change_low.tail(constants.trading_days)
+    pct_change_low = pct_change_low[pct_change.index]
     # get days on which the kelly criterion was > 5
     dates_iloc = np.where(kelly_lev > 5)[0]
     # add leverage and dates to the return dictionary

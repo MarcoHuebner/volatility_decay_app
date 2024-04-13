@@ -125,14 +125,19 @@ def simplified_lev_factor(
         raise TypeError("The leverage must be a float.")
     if daily_returns.isnull().values.any() or daily_returns.empty:
         raise ValueError("The daily returns contain missing values or are empty.")
+    if daily_low_returns.isnull().values.any() or daily_low_returns.empty:
+        raise ValueError("The daily low returns contain missing values or are empty.")
     # compute daily returns of the factor product
     daily_returns = daily_returns * leverage + gmean(-expense_ratio / percent)
 
     # get first intra-day knockout event (if it exists)
-    mask = (daily_low_returns * leverage).le(-1)
-    if not mask.empty:
+    # add 5% safety margin for the issuer, when the knockout is triggered
+    cutoff_margin = 0.05
+    mask = (daily_low_returns * leverage).le(-1 + cutoff_margin)
+    index = mask.idxmax()
+    if mask[index]:
         # set all following returns to negative one to obtain a zero cumprod
-        index = mask.idxmax()
+        # if idxmax is a "true" value (i.e. the first knockout event)
         daily_returns.loc[index:] = -1
     else:
         # simplify: Assume the costs consist of only volume dependend costs, neglecting fixed costs
@@ -171,19 +176,22 @@ def simplified_knockout(
         raise TypeError("The leverage must be a float.")
     if price.isnull().values.any() or price.empty:
         raise ValueError("The price data contains missing values or is empty.")
-    # compute knockout barrier, incl. expense ratio estimation
+    if low_price.isnull().values.any() or low_price.empty:
+        raise ValueError("The low price data contains missing values or is empty.")
+    # compute knockout barrier, incl. expense ratio estimation (all contained in buy)
     ko_val = (
-        price.iloc[0] * (1 - (1 / initial_leverage)) * (1 - expense_ratio / percent)
+        price.iloc[0] * (1 - (1 / initial_leverage)) * (1 + expense_ratio / percent)
     )
     # compute daily returns
     pct_change = (price - ko_val).pct_change().dropna()
 
     # get first knockout event (if it exists) - include intra-day knockouts
-    mask = (price.le(ko_val)) | (low_price.le(ko_val))
+    mask = (price.le(ko_val)) | (low_price.iloc[1:].le(ko_val))
     index = mask.idxmax()
 
     if mask[index]:
         # set all following returns to negative one to obtain a zero cumprod
+        # if idxmax is a "true" value (i.e. the first knockout event)
         pct_change.loc[index:] = -1
     else:
         # simplify: Assume the costs consist of only volume dependent costs, neglecting fixed costs
@@ -433,7 +441,7 @@ def fetch_ticker_data(ticker: str) -> dict[str, None | str | pd.Series | pd.Data
         closing = data["Close"]
         low = data["Low"]
         # Align the closing and low prices (drop the days with missing values in either column)
-        low, closing = low.align(closing, join="inner")
+        # low, closing = low.align(closing, join="inner")
         # Slice the data to the one and two years, to reduce computation time
         starting_date_1y = closing.index[-constants.trading_days]
         # Calculate the moving averages
