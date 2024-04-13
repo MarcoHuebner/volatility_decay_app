@@ -102,6 +102,7 @@ def performance_cumprod(returns: pd.Series | pd.DataFrame) -> float | pd.Series:
 
 def simplified_lev_factor(
     daily_returns: pd.Series,
+    daily_low_returns: pd.Series,
     expense_ratio: float,
     rel_transact_costs: float,
     hold_period: int,
@@ -112,6 +113,7 @@ def simplified_lev_factor(
     Calculate the daily returns of a factor with leverage using a simplified model.
 
     :param daily_returns: pd.Series, daily returns of the underlying asset
+    :param daily_low_returns: pd.Series, daily low returns of the underlying asset
     :param expense_ratio: float, expense ratio of the factor (in percent)
     :param rel_transact_costs: float, cost ratio assumed for each buy and sell transaction (in percent)
     :param hold_period: int, number of days the factor should be held
@@ -126,17 +128,25 @@ def simplified_lev_factor(
     # compute daily returns of the factor product
     daily_returns = daily_returns * leverage + gmean(-expense_ratio / percent)
 
-    # simplify: Assume the costs consist of only volume dependend costs, neglecting fixed costs
-    daily_returns.iloc[0] -= rel_transact_costs / percent
-    # subtract selling if the holding period is reached
-    if len(daily_returns) >= hold_period:
-        daily_returns.iloc[-1] -= rel_transact_costs / percent
+    # get first intra-day knockout event (if it exists)
+    mask = (daily_low_returns * leverage).le(-1)
+    if not mask.empty:
+        # set all following returns to negative one to obtain a zero cumprod
+        index = mask.idxmax()
+        daily_returns.loc[index:] = -1
+    else:
+        # simplify: Assume the costs consist of only volume dependend costs, neglecting fixed costs
+        daily_returns.iloc[0] -= rel_transact_costs / percent
+        # subtract selling if the holding period is reached
+        if len(daily_returns) >= hold_period:
+            daily_returns.iloc[-1] -= rel_transact_costs / percent
 
     return daily_returns
 
 
 def simplified_knockout(
     price: pd.Series,
+    low_price: pd.Series,
     expense_ratio: float,
     rel_transact_costs: float,
     hold_period: int,
@@ -149,6 +159,7 @@ def simplified_knockout(
     closing course of the first day, making zero returns on the first day.
 
     :param price: pd.Series, price of the underlying asset
+    :param low_price: pd.Series, low price of the underlying asset
     :param expense_ratio: float, expense ratio of the knockout product (in percent)
     :param rel_transact_costs: float, cost ratio assumed for each buy and sell transaction (in percent)
     :param hold_period: int, number of days the knockout product should be held
@@ -167,21 +178,19 @@ def simplified_knockout(
     # compute daily returns
     pct_change = (price - ko_val).pct_change().dropna()
 
-    # get first knockout event (if it exists)
-    mask = price.le(ko_val)
+    # get first knockout event (if it exists) - include intra-day knockouts
+    mask = (price.le(ko_val)) | (low_price.le(ko_val))
     index = mask.idxmax()
 
     if mask[index]:
-        # set all following returns to zero to stay at the knockout level
-        pct_change.loc[index:] = 0
+        # set all following returns to negative one to obtain a zero cumprod
+        pct_change.loc[index:] = -1
     else:
-        pass
-
-    # simplify: Assume the costs consist of only volume dependent costs, neglecting fixed costs
-    pct_change.iloc[0] -= rel_transact_costs / percent
-    # subtract selling if the holding period is reached
-    if len(pct_change) >= hold_period:
-        pct_change.iloc[-1] -= rel_transact_costs / percent
+        # simplify: Assume the costs consist of only volume dependent costs, neglecting fixed costs
+        pct_change.iloc[0] -= rel_transact_costs / percent
+        # subtract selling if the holding period is reached
+        if len(pct_change) >= hold_period:
+            pct_change.iloc[-1] -= rel_transact_costs / percent
 
     return pct_change
 
@@ -416,21 +425,26 @@ def fetch_ticker_data(ticker: str) -> dict[str, None | str | pd.Series | pd.Data
     lazy_dict = yfinance.Ticker(ticker)
 
     # Pick the relevant data
-    data = lazy_dict.history(period="2y", interval="1d", auto_adjust=True)["Close"]
+    data = lazy_dict.history(period="2y", interval="1d", auto_adjust=True)
     if data.empty:
         raise ValueError(f"Ticker {ticker} not found. Please check the ticker symbol.")
     else:
+        # Collect closing prices and daily low prices
+        closing = data["Close"]
+        low = data["Low"]
+        # Align the closing and low prices (drop the days with missing values in either column)
+        low, closing = low.align(closing, join="inner")
         # Slice the data to the one and two years, to reduce computation time
-        starting_date_1y = data.index[-constants.trading_days]
+        starting_date_1y = closing.index[-constants.trading_days]
         # Calculate the moving averages
-        ma50 = data.rolling(window=50).mean().dropna()
-        ma200 = data.rolling(window=200).mean().dropna()
+        ma50 = closing.rolling(window=50).mean().dropna()
+        ma200 = closing.rolling(window=200).mean().dropna()
         # Get the full name of the ticker symbol
         name = lazy_dict.info["longName"]
         # Compute the 30-day volatility (VIX for S&P)
-        vix = empirical_annualized_volatility(data, window=30)
+        vix = empirical_annualized_volatility(closing, window=30)
         # Compute the annualized volatility
-        ann_vol = empirical_annualized_volatility(data)
+        ann_vol = empirical_annualized_volatility(closing)
         # Get the earnings dates, force them None if KeyError occurs
         try:
             earnings_dates = lazy_dict.get_earnings_dates()
@@ -439,7 +453,8 @@ def fetch_ticker_data(ticker: str) -> dict[str, None | str | pd.Series | pd.Data
         # Create a dictionary with the last year of (trading days) data (except for price)
         result_dict = {
             "name": name,
-            "price": data,
+            "price": closing,
+            "low": low,
             "ann_volatility": ann_vol.loc[starting_date_1y:],
             "30_d_volatility_vix": vix.loc[starting_date_1y:],
             # "garch_volatility": garch_estimated_volatility(data),

@@ -258,7 +258,9 @@ def get_derivatives_data(
     # get data of the underlying
     result_dict = fetch_ticker_data(ticker)
     price = result_dict["price"].tail(constants.trading_days)
+    low = result_dict["low"].tail(constants.trading_days)
     pct_change = result_dict["price"].pct_change().dropna()
+    pct_change_low = (low - price).pct_change().dropna()
     # get earning dates if not None (e.g. for indices)
     if result_dict["earnings"] is not None:
         earnings = result_dict["earnings"]["Reported EPS"]
@@ -274,6 +276,7 @@ def get_derivatives_data(
         pct_change, risk_free_rate_ticker, time_window=time_window
     ).tail(constants.trading_days)
     pct_change = pct_change.tail(constants.trading_days)
+    pct_change_low = pct_change_low.tail(constants.trading_days)
     # get days on which the kelly criterion was > 5
     dates_iloc = np.where(kelly_lev > 5)[0]
     # add leverage and dates to the return dictionary
@@ -294,6 +297,7 @@ def get_derivatives_data(
             performance_cumprod(
                 simplified_lev_factor(
                     pct_change.iloc[date : date + holding_period],
+                    pct_change_low.iloc[date : date + holding_period],
                     expenses,
                     rel_transact_costs,
                     holding_period,
@@ -308,6 +312,7 @@ def get_derivatives_data(
                 # the closing price of the previous day
                 simplified_knockout(
                     price.iloc[date - 1 : date + holding_period],
+                    low.iloc[date - 1 : date + holding_period],
                     expenses,
                     rel_transact_costs,
                     holding_period,
