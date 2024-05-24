@@ -17,12 +17,10 @@ describing the quadratic behaviour:
 
 """
 
+import dash
 import numpy as np
 import plotly.graph_objects as go
-
-import dash
-from dash import dcc
-from dash import html
+from dash import dcc, html
 from dash.dependencies import Input, Output
 
 

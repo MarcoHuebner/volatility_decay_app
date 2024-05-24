@@ -8,4 +8,4 @@ This project contains visualizations of the volatility decay phenomenon as well 
 
 ## Installation
 
-Install the given requirements - otherwise the file is required for Streamlit to run the app. For Dash, the additional requirements are given in the initial docstring, along with CSS assets in the `assets` folder.
+Install the requirements given in the `requirements.txt` (via `pip install -r requirements.txt`). The requirements file is further required for Streamlit to run (start/ build) the app. For Dash, the additional requirements are given in the initial docstring, along with CSS assets in the `assets` folder. For updating the list of currently tradeable assets using TradeRepublic, the `tr_export.py` script can be used, which further requires `selenium` (as stated in the docstring).
