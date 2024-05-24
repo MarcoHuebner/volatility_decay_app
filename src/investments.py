@@ -95,7 +95,7 @@ def update_ticker_plot(ticker: str, risk_free_rate_ticker: float) -> go.Figure:
 
     # get data
     result_dict = fetch_ticker_data(ticker)
-    price = result_dict["price"].tail(constants.trading_days)
+    price = result_dict["price"].tail(constants.five_years)
     # get earning dates if not None (e.g. for indices)
     if result_dict["earnings"] is not None:
         earnings = result_dict["earnings"]["Reported EPS"]
@@ -175,7 +175,7 @@ def update_ticker_plot(ticker: str, risk_free_rate_ticker: float) -> go.Figure:
     fig.add_trace(
         go.Scatter(
             x=price.index,
-            y=pct_change.iloc[-constants.trading_days :],
+            y=pct_change.iloc[-constants.five_years :],
             mode="lines",
             name="Daily Returns",
             yaxis="y3",
@@ -189,7 +189,7 @@ def update_ticker_plot(ticker: str, risk_free_rate_ticker: float) -> go.Figure:
 
     # calculate the Kelly Criterion with maximum of the three volatilities
     average_vol_30d = result_dict["30_d_volatility_vix"].iloc[-52:].mean()
-    average_daily_return = pct_change.iloc[-constants.trading_days :].mean()
+    average_daily_return = pct_change.iloc[-constants.five_years :].mean()
     max_vol = max(
         result_dict["ann_volatility"].iloc[-1],
         # result_dict["garch_volatility"].iloc[-1],
@@ -227,7 +227,10 @@ def update_ticker_plot(ticker: str, risk_free_rate_ticker: float) -> go.Figure:
         + f" - Current 1%/5% PaR (past 2y): {par_1:.2f}%/{par_5:.2f}%</span>",
         hovermode="x unified",
         yaxis=dict(
-            title="Closing Prices", title_font=dict(color=st_blue), hoverformat=".2f"
+            title="Closing Prices",
+            title_font=dict(color=st_blue),
+            hoverformat=".2f",
+            fixedrange=False,
         ),
         yaxis2=dict(
             title="Annualized Volatility [%]",
@@ -235,6 +238,7 @@ def update_ticker_plot(ticker: str, risk_free_rate_ticker: float) -> go.Figure:
             overlaying="y",
             title_font=dict(color=st_red),
             hoverformat=".2f",
+            fixedrange=False,
         ),
         yaxis3=dict(
             title="Daily Returns [%]",
@@ -243,6 +247,7 @@ def update_ticker_plot(ticker: str, risk_free_rate_ticker: float) -> go.Figure:
             position=0.96,
             title_font=dict(color=st_green),
             hoverformat=".2f",
+            fixedrange=False,
         ),
         xaxis=xaxis_slider(price),
     )
@@ -262,17 +267,20 @@ def get_derivatives_data(
     rel_transact_costs: float,
     time_window: int,
     holding_period: int,
+    leverage_signal: float,
     include_tax: bool,
 ) -> dict[str, pd.Series | list | float]:
     # get data of the underlying
     result_dict = fetch_ticker_data(ticker)
     price = result_dict["price"]
     low = result_dict["low"]
+
     # calculate the daily percentage change of the price to previous day close
     pct_change = price.pct_change().dropna()
     # calculate the daily percentage change of the low price to previous day close
     pct_change_low = ((low - price.shift(1)) / price.shift(1)).dropna()
-    low, price = low.tail(constants.trading_days), price.tail(constants.trading_days)
+    low = low.tail(constants.five_years)
+    price = price.tail(constants.five_years)
     # get earning dates if not None (e.g. for indices)
     if result_dict["earnings"] is not None:
         earnings = result_dict["earnings"]["Reported EPS"]
@@ -286,11 +294,11 @@ def get_derivatives_data(
     # show results of fixed length holding_period day intervals
     kelly_lev = kelly_leverage(
         pct_change, risk_free_rate_ticker, time_window=time_window
-    ).tail(constants.trading_days)
-    pct_change = pct_change.tail(constants.trading_days)
+    ).tail(constants.five_years)
+    pct_change = pct_change.tail(constants.five_years)
     pct_change_low = pct_change_low[pct_change.index]
-    # get days on which the kelly criterion was > 5
-    dates_iloc = np.where(kelly_lev > 5)[0]
+    # get days on which the kelly criterion was > leverage_signal
+    dates_iloc = np.where(kelly_lev > leverage_signal)[0]
     # add leverage and dates to the return dictionary
     data_dict["kelly_lev"] = kelly_lev
     data_dict["dates_iloc"] = dates_iloc
@@ -394,6 +402,7 @@ def update_derivatives_performance_plot(
     data_dict: dict[str, pd.Series | list | float],
     leverage: float,
     holding_period: int,
+    leverage_signal: float,
 ) -> go.Figure:
     # create the plotly figure
     fig = go.Figure()
@@ -508,7 +517,7 @@ def update_derivatives_performance_plot(
     fig.add_trace(
         go.Scatter(
             x=[kelly_lev.index.min(), kelly_lev.index.max()],
-            y=[5, 5],
+            y=[leverage_signal, leverage_signal],
             mode="lines",
             yaxis="y3",
             line=dict(color=st_red, dash="dash"),
@@ -524,12 +533,15 @@ def update_derivatives_performance_plot(
     # update layout
     fig.update_layout(
         title=f"<span style='font-size: 24px;'>{name} Derivative Performance</span><br>"
-        + "<span style='font-size: 16px;'>Given a Rolling Kelly Leverage Factor of 5"
-        + f" as Signal - Amount of Signals in the Past {constants.trading_days}"
-        + f" Trading Days: {len(dates_iloc)}</span>",
+        + "<span style='font-size: 16px;'>Given a Rolling Kelly Leverage Factor of"
+        + f" {leverage_signal} as Signal - Amount of Signals in the Past"
+        + f" {constants.five_years} Trading Days: {len(dates_iloc)}</span>",
         hovermode="x unified",
         yaxis=dict(
-            title="Closing Prices", title_font=dict(color=st_blue), hoverformat=".2f"
+            title="Closing Prices",
+            title_font=dict(color=st_blue),
+            hoverformat=".2f",
+            fixedrange=False,
         ),
         yaxis2=dict(
             title=f"Returns @ Buy Date + {holding_period} Days [%]",
@@ -537,6 +549,7 @@ def update_derivatives_performance_plot(
             overlaying="y",
             title_font=dict(color=st_dark_blue),
             hoverformat=".2f",
+            fixedrange=False,
         ),
         yaxis3=dict(
             title="Proposed Leverage Factor",
@@ -545,6 +558,7 @@ def update_derivatives_performance_plot(
             position=0.96,
             title_font=dict(color=st_red),
             hoverformat=".2f",
+            fixedrange=False,
         ),
         xaxis=xaxis_slider(price),
     )
@@ -624,14 +638,16 @@ def update_derivates_calibration_plot(
         col=2,
     )
     # add derivatives zero return line
+    y_lower_cutoff = min(min(returns_lev), min(returns_ko)) - 5
+    y_upper_cutoff = max(max(returns_lev), max(returns_ko)) + 5
     fig.add_shape(
         type="line",
         xref="x",
         yref="y",
         x0=0,
-        y0=min(min(returns_lev), min(returns_ko)),
+        y0=y_lower_cutoff,
         x1=0,
-        y1=max(max(returns_lev), max(returns_ko)),
+        y1=y_upper_cutoff,
         line=dict(
             color=st_green,
             width=2,
@@ -675,6 +691,7 @@ def update_derivates_calibration_plot(
             title=f"{leverage}x Factor and Knockout Returns [%]",
             title_font=dict(color=st_darker_blue),
             hoverformat=".2f",
+            range=[y_lower_cutoff, y_upper_cutoff],
         ),
     )
 

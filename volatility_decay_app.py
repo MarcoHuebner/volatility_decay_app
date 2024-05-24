@@ -266,10 +266,18 @@ if __name__ == "__main__":
         holding_period = st.slider(
             "Holding Period of the Derivatives [Trading Days]",
             min_value=5,
-            max_value=50,
+            max_value=150,
             value=15,
             step=5,
             format="%d",
+        )
+        # Slider for the Kelly leverage signal
+        leverage_signal = st.slider(
+            "Kelly Leverage Signal",
+            min_value=-5.0,
+            max_value=10.0,
+            value=5.0,
+            step=0.5,
         )
         # Slider for the leverage of the derivatives
         derivative_leverage = st.slider(
@@ -288,6 +296,7 @@ if __name__ == "__main__":
             rel_transact_costs,
             look_back_window,
             holding_period,
+            leverage_signal,
             include_tax,
         )
         # Display aggregated statistics of the derivatives
@@ -300,12 +309,14 @@ if __name__ == "__main__":
             data_dict,
             derivative_leverage,
             holding_period,
+            leverage_signal,
         )
         st.write(
-            f"Win ratio over the past {constants.trading_days} trading days (KO / Factor):"
+            f"Win ratio over the past {constants.five_years} trading days (KO / Factor):"
             + f" {win_ratio_ko:.1f}%/ {win_ratio_f:.1f}%. Average risk (loss)"
-            + f" vs. average reward (win) per trade over the past {constants.trading_days}"
+            + f" vs. average reward (win) per trade over the past {constants.five_years}"
             + f" trading days (KO/ Factor): 1:{reward_ko:.2f}/ 1:{reward_f:.2f}"
+            + r" (take the inverse of this ratio as an estimate for $b$ in the Kelly formula)."
         )
         st.plotly_chart(
             derivates_fig,

@@ -433,7 +433,7 @@ def fetch_ticker_data(ticker: str) -> dict[str, None | str | pd.Series | pd.Data
     lazy_dict = yfinance.Ticker(ticker)
 
     # Pick the relevant data
-    data = lazy_dict.history(period="2y", interval="1d", auto_adjust=True)
+    data = lazy_dict.history(period="6y", interval="1d", auto_adjust=True)
     if data.empty:
         raise ValueError(f"Ticker {ticker} not found. Please check the ticker symbol.")
     else:
@@ -443,7 +443,7 @@ def fetch_ticker_data(ticker: str) -> dict[str, None | str | pd.Series | pd.Data
         # Align the closing and low prices (drop the days with missing values in either column)
         # low, closing = low.align(closing, join="inner")
         # Slice the data to the one and two years, to reduce computation time
-        starting_date_1y = closing.index[-constants.trading_days]
+        starting_date_1y = closing.index[-constants.five_years]
         # Calculate the moving averages
         ma50 = closing.rolling(window=50).mean().dropna()
         ma200 = closing.rolling(window=200).mean().dropna()

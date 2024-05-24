@@ -7,6 +7,7 @@ import numpy as np
 
 # define the trading days in a year
 trading_days = 252
+five_years = 5 * trading_days
 
 # define display functions
 ann_return = 0.037 * trading_days
