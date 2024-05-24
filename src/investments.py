@@ -331,8 +331,8 @@ def get_derivatives_data(
                 # assume that the knockout is bought during the day for
                 # the closing price of the previous day
                 simplified_knockout(
-                    price.iloc[date - 1 : date + holding_period],
-                    low.iloc[date - 1 : date + holding_period],
+                    price.iloc[max(date - 1, dates_iloc[0]) : date + holding_period],
+                    low.iloc[max(date - 1, dates_iloc[0]) : date + holding_period],
                     expenses,
                     rel_transact_costs,
                     holding_period,

@@ -437,9 +437,9 @@ def fetch_ticker_data(ticker: str) -> dict[str, None | str | pd.Series | pd.Data
     if data.empty:
         raise ValueError(f"Ticker {ticker} not found. Please check the ticker symbol.")
     else:
-        # Collect closing prices and daily low prices
-        closing = data["Close"]
-        low = data["Low"]
+        # Collect closing prices and daily low prices (forward-fill, drop other missing values)
+        closing = data["Close"].ffill().dropna()
+        low = data["Low"].ffill().dropna()
         # Align the closing and low prices (drop the days with missing values in either column)
         # low, closing = low.align(closing, join="inner")
         # Slice the data to the one and two years, to reduce computation time
