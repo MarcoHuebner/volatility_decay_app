@@ -179,11 +179,11 @@ def simplified_knockout(
     if low_price.isnull().values.any() or low_price.empty:
         raise ValueError("The low price data contains missing values or is empty.")
     # compute knockout barrier, incl. expense ratio estimation (all contained in buy)
-    ko_val = (
-        price.iloc[0] * (1 - (1 / initial_leverage)) * (1 + expense_ratio / percent)
-    )
+    ko_val = price.iloc[0] * (1 - (1 / initial_leverage))
     # compute daily returns
-    pct_change = (price - ko_val).pct_change().dropna()
+    pct_change = (price - ko_val).pct_change().dropna() + gmean(
+        -expense_ratio / percent
+    )
 
     # get first knockout event (if it exists) - include intra-day knockouts
     mask = (price.le(ko_val)) | (low_price.iloc[1:].le(ko_val))
