@@ -97,6 +97,11 @@ def performance_cumprod(returns: pd.Series | pd.DataFrame) -> float | pd.Series:
     """
     if returns.isnull().values.any():
         raise ValueError("The returns contain missing values.")
+    if returns.empty:
+        # instead of handling the empty case, raise an error (force clean data)
+        raise ValueError("The returns are empty.")
+
+    # seemingly no gains with np.cumprod here
     return ((1 + returns).cumprod().iloc[-1] - 1) * 100
 
 
@@ -108,7 +113,7 @@ def simplified_lev_factor(
     hold_period: int,
     leverage: float = 1.0,
     percent: float = 100.0,
-):
+) -> pd.Series:
     """
     Calculate the daily returns of a factor with leverage using a simplified model.
 
@@ -133,12 +138,13 @@ def simplified_lev_factor(
     # get first intra-day knockout event (if it exists)
     # add 5% safety margin for the issuer, when the knockout is triggered
     cutoff_margin = 0.05
-    mask = (daily_low_returns * leverage).le(-1 + cutoff_margin)
-    index = mask.idxmax()
-    if mask[index]:
+    mask = (daily_low_returns.values * leverage) <= (-1 + cutoff_margin)
+
+    if mask.any():
         # set all following returns to negative one to obtain a zero cumprod
         # if idxmax is a "true" value (i.e. the first knockout event)
-        daily_returns.loc[index:] = -1
+        index = np.argmax(mask)
+        daily_returns.iloc[index:] = -1
     else:
         # simplify: Assume the costs consist of only volume dependend costs, neglecting fixed costs
         daily_returns.iloc[0] -= rel_transact_costs / percent
@@ -179,28 +185,31 @@ def simplified_knockout(
     if low_price.isnull().values.any() or low_price.empty:
         raise ValueError("The low price data contains missing values or is empty.")
     # compute knockout barrier, incl. expense ratio estimation (all contained in buy)
-    ko_val = price.iloc[0] * (1 - (1 / initial_leverage))
+    price_np = price.values
+    ko_val = price_np[0] * (1 - (1 / initial_leverage))
     # compute daily returns
-    pct_change = (price - ko_val).pct_change().dropna() + gmean(
+    pct_change = np.diff(price_np - ko_val) / (price_np[:-1] - ko_val) + gmean(
         -expense_ratio / percent
     )
 
     # get first knockout event (if it exists) - include intra-day knockouts
-    mask = (price.le(ko_val)) | (low_price.iloc[1:].le(ko_val))
-    index = mask.idxmax()
+    mask = (price_np <= ko_val) | (
+        np.concatenate(([price_np[0]], low_price.values[1:])) <= ko_val
+    )
 
-    if mask[index]:
+    if mask.any():
         # set all following returns to negative one to obtain a zero cumprod
         # if idxmax is a "true" value (i.e. the first knockout event)
-        pct_change.loc[index:] = -1
+        index = np.argmax(mask)
+        pct_change[index:] = -1
     else:
         # simplify: Assume the costs consist of only volume dependent costs, neglecting fixed costs
-        pct_change.iloc[0] -= rel_transact_costs / percent
+        pct_change[0] -= rel_transact_costs / percent
         # subtract selling if the holding period is reached
         if len(pct_change) >= hold_period:
-            pct_change.iloc[-1] -= rel_transact_costs / percent
+            pct_change[-1] -= rel_transact_costs / percent
 
-    return pct_change
+    return pd.Series(pct_change, index=price.index[1:])
 
 
 def kelly_crit(
