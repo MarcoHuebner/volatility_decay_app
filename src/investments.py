@@ -8,6 +8,7 @@ import math
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
+import streamlit as st
 from plotly.subplots import make_subplots
 
 from src import constants
@@ -288,7 +289,12 @@ def get_derivatives_data(
         earnings = None
 
     # define the data dictionary
-    data_dict = {"name": result_dict["name"], "price": price, "earnings": earnings}
+    data_dict = {
+        "name": result_dict["name"],
+        "price": price,
+        "low": low,
+        "earnings": earnings,
+    }
 
     # how have derivatives with kelly criterion > 5 performed in the past?
     # show results of fixed length holding_period day intervals
@@ -299,6 +305,9 @@ def get_derivatives_data(
     pct_change_low = pct_change_low[pct_change.index]
     # get days on which the kelly criterion was > leverage_signal
     dates_iloc = np.where(kelly_lev > leverage_signal)[0]
+    # remove last date if it is the last date of the series to avoid empty returns
+    if dates_iloc[-1] == len(kelly_lev) - 1:
+        dates_iloc = dates_iloc[:-1]
     # add leverage and dates to the return dictionary
     data_dict["kelly_lev"] = kelly_lev
     data_dict["dates_iloc"] = dates_iloc
@@ -693,6 +702,194 @@ def update_derivates_calibration_plot(
             hoverformat=".2f",
             range=[y_lower_cutoff, y_upper_cutoff],
         ),
+    )
+
+    return fig
+
+
+@st.cache_data(ttl=1800, show_spinner=False)
+def compute_grid_data(
+    price: pd.Series,
+    low: pd.Series,
+    dates_iloc: np.ndarray,
+    holding_period_grid: np.ndarray,
+    leverage_grid: np.ndarray,
+    expenses: float,
+    rel_transact_costs: float,
+) -> tuple[list, list, list]:
+    # calculate the daily percentage change of the price to previous day close
+    pct_change = price.pct_change().dropna()
+    # calculate the daily percentage change of the low price to previous day close
+    pct_change_low = ((low - price.shift(1)) / price.shift(1)).dropna()
+
+    # initialize the return values
+    returns_1x = []
+    returns_lev = []
+    returns_ko = []
+
+    # calculate the total number of iterations
+    total_iterations = len(leverage_grid) * len(holding_period_grid)
+    count = 0
+    # create a progress bar
+    progress_bar = st.progress(0)
+
+    for holding_period in holding_period_grid:
+        # filter out dates that haven't run the full holding_period days
+        # to avoid skewing the results (but then lacking up-to-date data)
+        filtered_dates = [
+            date for date in dates_iloc if date + holding_period < len(price)
+        ]
+        print(len(dates_iloc) - len(filtered_dates))
+
+        # sample holding_period day interval returns
+        returns_1x.append(
+            np.median(
+                [
+                    performance_cumprod(pct_change.iloc[date : date + holding_period])
+                    for date in filtered_dates
+                ]
+            )
+        )
+        # sample derivative leverages
+        for leverage in leverage_grid:
+            returns_lev.append(
+                np.median(
+                    [
+                        performance_cumprod(
+                            simplified_lev_factor(
+                                pct_change.iloc[date : date + holding_period],
+                                pct_change_low.iloc[date : date + holding_period],
+                                expenses,
+                                rel_transact_costs,
+                                holding_period,
+                                leverage,
+                            )
+                        )
+                        for date in filtered_dates
+                    ]
+                )
+            )
+            returns_ko.append(
+                np.median(
+                    [
+                        performance_cumprod(
+                            # assume that the knockout is bought during the day for
+                            # the closing price of the previous day
+                            simplified_knockout(
+                                price.iloc[
+                                    max(date - 1, dates_iloc[0]) : date + holding_period
+                                ],
+                                low.iloc[
+                                    max(date - 1, dates_iloc[0]) : date + holding_period
+                                ],
+                                expenses,
+                                rel_transact_costs,
+                                holding_period,
+                                leverage,
+                            )
+                        )
+                        for date in filtered_dates
+                    ]
+                )
+            )
+
+            # increment the counter
+            count += 1
+            # update the progress bar
+            progress_bar.progress(count / total_iterations)
+
+    return returns_1x, returns_lev, returns_ko
+
+
+def summary_median_performance_plot(
+    data_dict: dict[str, pd.Series | list | float],
+    expenses: float,
+    rel_transact_costs: float,
+    include_tax: bool,
+) -> go.Figure:
+    # define the data grid, usually, max. lev of 10-12 is sufficient for plotting purposes
+    leverage_grid = np.linspace(1, 20, 20, endpoint=True)
+    holding_period_grid = np.linspace(5, 200, 15, endpoint=True, dtype=int)
+
+    # unpack the relevant data dictionary entries 
+    # to allow caching across different irrelevant slider values
+    price = data_dict["price"]
+    low = data_dict["low"]
+    dates_iloc = data_dict["dates_iloc"]
+
+    returns_1x, returns_lev, returns_ko = compute_grid_data(
+        price,
+        low,
+        dates_iloc,
+        holding_period_grid,
+        leverage_grid,
+        expenses,
+        rel_transact_costs,
+    )
+
+    if include_tax:
+        # define tax rate
+        tax = 0.25
+        solidary_tax = 0.01375
+        remaining_gain = 1 - (tax + solidary_tax)
+        # add tax on profits
+        returns_lev = [r if r < 0 else r * remaining_gain for r in returns_lev]
+        returns_ko = [r if r < 0 else r * remaining_gain for r in returns_ko]
+        returns_lev = [r if r < 0 else r * remaining_gain for r in returns_lev]
+
+    # reshape the 1D lists into 2D arrays
+    returns_1x = np.array(returns_1x).reshape(1, len(holding_period_grid))
+    returns_lev_t = np.zeros((len(holding_period_grid), len(leverage_grid)))
+    returns_ko_t = np.zeros((len(holding_period_grid), len(leverage_grid)))
+    for i, _ in enumerate(holding_period_grid):
+        for j, _ in enumerate(leverage_grid):
+            returns_lev_t[i, j] = returns_lev[i * len(leverage_grid) + j]
+            returns_ko_t[i, j] = returns_ko[i * len(leverage_grid) + j]
+
+    # create a subplot layout with 3 rows and 1 column
+    fig = make_subplots(
+        rows=3,
+        cols=1,
+        vertical_spacing=0.05,
+        shared_xaxes=True,
+        subplot_titles=("Heatmap Underlying", "Heatmap Factor", "Heatmap KO"),
+    )
+
+    # create the heatmaps
+    heatmap_1x = go.Heatmap(
+        z=returns_1x,
+        x=holding_period_grid,
+        y=(leverage_grid[0],),
+        coloraxis="coloraxis1",
+    )
+    heatmap_lev = go.Heatmap(
+        z=returns_lev_t.T,
+        x=holding_period_grid,
+        y=leverage_grid,
+        coloraxis="coloraxis2",
+    )
+    heatmap_ko = go.Heatmap(
+        z=returns_ko_t.T, x=holding_period_grid, y=leverage_grid, coloraxis="coloraxis3"
+    )
+
+    # add the heatmaps to the subplots
+    fig.add_trace(heatmap_1x, row=1, col=1)
+    fig.add_trace(heatmap_lev, row=2, col=1)
+    fig.add_trace(heatmap_ko, row=3, col=1)
+
+    # add descriptions and individual colorbars
+    for row in range(3):
+        fig.update_yaxes(title_text="Leverage", row=row + 1, col=1)
+    fig.update_xaxes(title_text="Holding Period [trading days]", row=row + 1, col=1)
+    fig.update_layout(
+        coloraxis1=dict(colorbar=dict(len=0.33, y=0.85, title="Median Return [%]")),
+        coloraxis2=dict(colorbar=dict(len=0.33, y=0.5, title="Median Return [%]")),
+        coloraxis3=dict(colorbar=dict(len=0.33, y=0.15, title="Median Return [%]")),
+        title_text="Median Return Heatmaps",
+        height=1000,
+    )
+    fig.update_traces(
+        hovertemplate="Median Return [%]: %{z:.2f}<br>Holding Period [days]: %{x:.0f}<br>Leverage: %{y:.1f}<extra></extra>"
     )
 
     return fig

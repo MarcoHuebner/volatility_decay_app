@@ -24,6 +24,7 @@ import streamlit as st
 from src import constants
 from src.investments import (
     get_derivatives_data,
+    summary_median_performance_plot,
     update_derivates_calibration_plot,
     update_derivatives_performance_plot,
     update_ticker_plot,
@@ -328,6 +329,18 @@ if __name__ == "__main__":
         )
         st.plotly_chart(
             calibration_fig,
+            use_container_width=True,
+        )
+        # Add summary plot: leverage vs. holding period
+        # TODO: Maybe also add leverage vs. leverage signal...?
+        summary_fig = summary_median_performance_plot(
+            data_dict,
+            derivative_expenses,
+            rel_transact_costs,
+            include_tax,
+        )
+        st.plotly_chart(
+            summary_fig,
             use_container_width=True,
         )
 
