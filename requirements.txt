@@ -1,8 +1,8 @@
 arch
-numpy
+numpy==1.26.4
 plotly
-prophet
+prophet==1.1.5
 streamlit
 tqdm
 yfinance==0.2.37
-ipywidgets>=7.0.0
+ipywidgets>=8.0.0
