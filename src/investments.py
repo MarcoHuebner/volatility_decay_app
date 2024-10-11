@@ -11,17 +11,10 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 from src import constants
-from src.utils import (
-    fetch_ticker_data,
-    get_prophet_forecast,
-    kelly_crit,
-    kelly_leverage,
-    performance_cumprod,
-    plot_earnings_dates,
-    simplified_knockout,
-    simplified_lev_factor,
-    xaxis_slider,
-)
+from src.utils.utils import performance_cumprod, plot_earnings_dates, xaxis_slider
+from src.utils.kelly_calculations import kelly_crit, kelly_leverage
+from src.utils.data_and_forecast import fetch_ticker_data, get_prophet_forecast
+from src.utils.simple_leveraged_products import SimplifiedFactor, SimplifiedKnockout
 
 # define colours, loosely related to the streamlit default colours
 # https://discuss.streamlit.io/t/access-streamlit-default-color-palette/35737
@@ -302,6 +295,11 @@ def get_derivatives_data(
     # add leverage and dates to the return dictionary
     data_dict["kelly_lev"] = kelly_lev
     data_dict["dates_iloc"] = dates_iloc
+
+    # define the leverage and knockout factor
+    factor = SimplifiedFactor(expenses, rel_transact_costs, holding_period)
+    knockout = SimplifiedKnockout(expenses, rel_transact_costs, holding_period)
+
     if dates_iloc.size == 0:
         # set to 0 if no signals
         returns_1x, returns_lev, returns_ko = [0], [0], [0]
@@ -315,13 +313,10 @@ def get_derivatives_data(
         ]
         returns_lev = [
             performance_cumprod(
-                simplified_lev_factor(
+                factor.get_daily_returns(
                     pct_change.iloc[date : date + holding_period],
                     pct_change_low.iloc[date : date + holding_period],
-                    expenses,
-                    rel_transact_costs,
-                    holding_period,
-                    leverage,
+                    leverage=leverage,
                 )
             )
             for date in dates_iloc
@@ -330,13 +325,10 @@ def get_derivatives_data(
             performance_cumprod(
                 # assume that the knockout is bought during the day for
                 # the closing price of the previous day
-                simplified_knockout(
+                knockout.get_daily_returns(
                     price.iloc[max(date - 1, dates_iloc[0]) : date + holding_period],
                     low.iloc[max(date - 1, dates_iloc[0]) : date + holding_period],
-                    expenses,
-                    rel_transact_costs,
-                    holding_period,
-                    leverage,
+                    initial_leverage=leverage,
                 )
             )
             for date in dates_iloc

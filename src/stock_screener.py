@@ -6,11 +6,9 @@ average daily range, volatility, and positive returns.
 
 import pandas as pd
 
-from src.utils import (
-    empirical_annualized_volatility,
-    kelly_stock_universe,
-    performance_cumprod,
-)
+from src.utils.utils import performance_cumprod
+from src.utils.volatility_calculations import empirical_annualized_volatility
+from src.utils.kelly_calculations import kelly_stock_universe
 
 
 def kelly_selection(

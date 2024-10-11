@@ -35,7 +35,7 @@ from src.stock_screener import (
     positive_return_selection,
     volatility_selection,
 )
-from src.utils import download_universe
+from src.utils.data_and_forecast import download_universe
 
 if __name__ == "__main__":
     # define the layout
