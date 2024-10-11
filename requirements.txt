@@ -1,4 +1,5 @@
-arch
+arch==6.3.0
+deprecated==1.2.14
 numpy==1.26.4
 plotly
 prophet==1.1.5
