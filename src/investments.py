@@ -18,11 +18,49 @@ from src.utils.simple_leveraged_products import SimplifiedFactor, SimplifiedKnoc
 
 # define colours, loosely related to the streamlit default colours
 # https://discuss.streamlit.io/t/access-streamlit-default-color-palette/35737
-st_blue = "#83c9ff"
-st_dark_blue = "#0068c9"
-st_darker_blue = "#0054a3"
-st_red = "#ff2b2b"
-st_green = "#21c354"
+ST_BLUE = "#83c9ff"
+ST_DARK_BLUE = "#0068c9"
+ST_DARKER_BLUE = "#0054a3"
+ST_RED = "#ff2b2b"
+ST_LIGHT_RED = "#ff8c8c"
+ST_GREEN = "#21c354"
+
+
+class InvestmentData:
+    def __init__(self, ticker: str, risk_free_rate_for_ticker: float):
+        # define the ticker and fetch the data
+        self.ticker = ticker
+        self.risk_free_rate_for_ticker = risk_free_rate_for_ticker
+        self.result_dict = fetch_ticker_data(ticker)
+        # compute more specific and re-used data
+        self.price = self.result_dict["price"].tail(constants.five_years)
+        self.low = self.result_dict["low"].tail(constants.five_years)
+        self.pct_change = self.price.pct_change().dropna()
+        self.pct_change_low = (
+            (self.low - self.price.shift(1)) / self.price.shift(1)
+        ).dropna()[self.pct_change.index]
+        # get earnings if not None (e.g. for indices)
+        self.earnings = (
+            self.result_dict["earnings"]["Reported EPS"]
+            if self.result_dict["earnings"] is not None
+            else None
+        )
+
+    def get_forecast(self):
+        return get_prophet_forecast(self.price)
+
+    def get_kelly_leverage(self, time_window: int):
+        return kelly_leverage(
+            self.pct_change, self.risk_free_rate_for_ticker, time_window=time_window
+        ).tail(constants.five_years)
+
+    def get_par(self):
+        # calculate the Percentage at Risk (PaR) in unlikely events (worst 1% and 5%)
+        par_5 = np.percentile(self.pct_change.dropna(), 5)
+        par_1 = np.percentile(self.pct_change.dropna(), 1)
+        par_5_low = np.percentile(self.pct_change_low.dropna(), 5)
+        par_1_low = np.percentile(self.pct_change_low.dropna(), 1)
+        return min(par_5, par_5_low), min(par_1, par_1_low)
 
 
 def forecast_band_plot(
@@ -74,117 +112,103 @@ def forecast_band_plot(
 
 
 # define the ticker price data plot
-def update_ticker_plot(ticker: str, risk_free_rate_ticker: float) -> go.Figure:
+def update_ticker_plot(ticker: str, risk_free_rate_for_ticker: float) -> go.Figure:
     # create the plotly figure
     fig = go.Figure()
-    # define colours, loosely related to the streamlit default colours
-    # https://discuss.streamlit.io/t/access-streamlit-default-color-palette/35737
-    st_blue = "#83c9ff"
-    st_dark_blue = "#0068c9"
-    st_darker_blue = "#0054a3"
-    st_red = "#ff2b2b"
-    st_light_red = "#ff8c8c"
-    st_green = "#21c354"
-
     # get data
-    result_dict = fetch_ticker_data(ticker)
-    price = result_dict["price"].tail(constants.five_years)
-    # get earning dates if not None (e.g. for indices)
-    if result_dict["earnings"] is not None:
-        earnings = result_dict["earnings"]["Reported EPS"]
+    ticker_data = InvestmentData(ticker, risk_free_rate_for_ticker)
     # get prophet forecast
-    forecast_current, forecast_old = get_prophet_forecast(price)
+    forecast_current, forecast_old = ticker_data.get_forecast()
 
     # add price line
     fig.add_trace(
         go.Scatter(
-            x=price.index,
-            y=price,
+            x=ticker_data.price.index,
+            y=ticker_data.price,
             mode="lines",
             name="Closing Price",
-            line=dict(color=st_blue),
+            line=dict(color=ST_BLUE),
         )
     )
     # add forecast with uncertainty bands
-    fig = forecast_band_plot(fig, forecast_current, st_darker_blue, "Current Forecast")
-    fig = forecast_band_plot(fig, forecast_old, st_dark_blue, "Previous Forecast")
+    fig = forecast_band_plot(fig, forecast_current, ST_DARKER_BLUE, "Current Forecast")
+    fig = forecast_band_plot(fig, forecast_old, ST_DARK_BLUE, "Previous Forecast")
     # add 50-day moving average
     fig.add_trace(
         go.Scatter(
-            x=result_dict["ma50"].index,
-            y=result_dict["ma50"],
+            x=ticker_data.result_dict["ma50"].index,
+            y=ticker_data.result_dict["ma50"],
             name="50 Day MA",
-            line=dict(color=st_dark_blue, dash="dash"),
+            line=dict(color=ST_DARK_BLUE, dash="dash"),
         )
     )
     # add 200-day moving average
     fig.add_trace(
         go.Scatter(
-            x=result_dict["ma200"].index,
-            y=result_dict["ma200"],
+            x=ticker_data.result_dict["ma200"].index,
+            y=ticker_data.result_dict["ma200"],
             name="200 Day MA",
-            line=dict(color=st_darker_blue, dash="dot"),
+            line=dict(color=ST_DARKER_BLUE, dash="dot"),
         )
     )
     # add annualized volatility
     fig.add_trace(
         go.Scatter(
-            x=result_dict["ann_volatility"].index,
-            y=result_dict["ann_volatility"],
+            x=ticker_data.result_dict["ann_volatility"].index,
+            y=ticker_data.result_dict["ann_volatility"],
             mode="lines",
             name="Annualized Volatility",
             yaxis="y2",
-            line=dict(color=st_red),
+            line=dict(color=ST_RED),
         )
     )
     # add 30-d volatility (VIX for S&P)
     fig.add_trace(
         go.Scatter(
-            x=result_dict["30_d_volatility_vix"].index,
-            y=result_dict["30_d_volatility_vix"],
+            x=ticker_data.result_dict["30_d_volatility_vix"].index,
+            y=ticker_data.result_dict["30_d_volatility_vix"],
             mode="lines",
             name="30 Day Volatility Estimate",
             yaxis="y2",
             visible="legendonly",
-            line=dict(color=st_red, dash="dot"),
+            line=dict(color=ST_RED, dash="dot"),
         )
     )
     # add garch volatility
     fig.add_trace(
         go.Scatter(
-            x=[result_dict["ann_volatility"].index[0]],
-            y=[result_dict["ann_volatility"].min()],
+            x=[ticker_data.result_dict["ann_volatility"].index[0]],
+            y=[ticker_data.result_dict["ann_volatility"].min()],
             mode="text",
             name="GARCH Forecast Volatility",
             text=["Discontinued, see source code."],
-            textfont=dict(size=10, color=st_light_red),
+            textfont=dict(size=10, color=ST_LIGHT_RED),
             textposition="top right",
             yaxis="y2",
             visible="legendonly",
         )
     )
     # add daily percentage change
-    pct_change = result_dict["price"].pct_change().dropna() * 100
     fig.add_trace(
         go.Scatter(
-            x=price.index,
-            y=pct_change.iloc[-constants.five_years :],
+            x=ticker_data.price.index,
+            y=ticker_data.pct_change * 100,
             mode="lines",
             name="Daily Returns",
             yaxis="y3",
             visible="legendonly",
-            line=dict(color=st_green),
+            line=dict(color=ST_GREEN),
         )
     )
-    if result_dict["earnings"] is not None:
+    if ticker_data.earnings is not None:
         # add earnings dates
-        fig = plot_earnings_dates(earnings, price, fig)
+        fig = plot_earnings_dates(ticker_data.earnings, ticker_data.price, fig)
 
     # calculate the Kelly Criterion with maximum of the three volatilities
-    average_vol_30d = result_dict["30_d_volatility_vix"].iloc[-52:].mean()
-    average_daily_return = pct_change.iloc[-constants.five_years :].mean()
+    average_vol_30d = ticker_data.result_dict["30_d_volatility_vix"].iloc[-52:].mean()
+    average_daily_return = ticker_data.pct_change.iloc[-constants.five_years :].mean() * 100
     max_vol = max(
-        result_dict["ann_volatility"].iloc[-1],
+        ticker_data.result_dict["ann_volatility"].iloc[-1],
         # result_dict["garch_volatility"].iloc[-1],
         average_vol_30d,
     )
@@ -193,35 +217,25 @@ def update_ticker_plot(ticker: str, risk_free_rate_ticker: float) -> go.Figure:
     safety_vol = 3
     kelly = kelly_crit(
         average_daily_return * constants.trading_days + safety_return,
-        risk_free_rate_ticker,
+        risk_free_rate_for_ticker,
         max_vol + safety_vol,
     )
     # calculate the leverage factor for 20% volatility
-    lev_20 = 20 / result_dict["ann_volatility"].iloc[-1]
+    lev_20 = 20 / ticker_data.result_dict["ann_volatility"].iloc[-1]
     # calculate the Percentage at Risk (PaR)
-    par_5 = np.percentile(pct_change.dropna(), 5)
-    par_1 = np.percentile(pct_change.dropna(), 1)
-    # repeat for intra-day low prices
-    price = result_dict["price"]
-    low = result_dict["low"]
-    # calculate the daily percentage change of the low price to previous day close
-    pct_change_low = ((low - price.shift(1)) / price.shift(1)) * 100
-    par_5_low = np.percentile(pct_change_low.dropna(), 5)
-    par_1_low = np.percentile(pct_change_low.dropna(), 1)
-    # update the PaR with the lower values
-    par_5, par_1 = min(par_5, par_5_low), min(par_1, par_1_low)
-
+    par_5, par_1 = ticker_data.get_par()
+ 
     # update layout
     fig.update_layout(
         title=f"<span style='font-size: 24px;'>Current Price and"
-        + f" Volatility of {result_dict['name']}</span><br>"
+        + f" Volatility of {ticker_data.result_dict['name']}</span><br>"
         + f"<span style='font-size: 16px;'>Kelly Leverage Factor: {kelly:.2f}"
         + f" - Leverage @20% Volatility: {lev_20:.2f}"
         + f" - Current 1%/5% PaR (past 2y): {par_1:.2f}%/{par_5:.2f}%</span>",
         hovermode="x unified",
         yaxis=dict(
             title="Closing Prices",
-            title_font=dict(color=st_blue),
+            title_font=dict(color=ST_BLUE),
             hoverformat=".2f",
             fixedrange=False,
         ),
@@ -229,7 +243,7 @@ def update_ticker_plot(ticker: str, risk_free_rate_ticker: float) -> go.Figure:
             title="Annualized Volatility [%]",
             side="right",
             overlaying="y",
-            title_font=dict(color=st_red),
+            title_font=dict(color=ST_RED),
             hoverformat=".2f",
             fixedrange=False,
         ),
@@ -238,11 +252,11 @@ def update_ticker_plot(ticker: str, risk_free_rate_ticker: float) -> go.Figure:
             side="right",
             overlaying="y",
             position=0.96,
-            title_font=dict(color=st_green),
+            title_font=dict(color=ST_GREEN),
             hoverformat=".2f",
             fixedrange=False,
         ),
-        xaxis=xaxis_slider(price),
+        xaxis=xaxis_slider(ticker_data.price),
     )
     # update x width
     fig.update_xaxes(
@@ -254,7 +268,7 @@ def update_ticker_plot(ticker: str, risk_free_rate_ticker: float) -> go.Figure:
 
 def get_derivatives_data(
     ticker: str,
-    risk_free_rate_ticker: float,
+    risk_free_rate_for_ticker: float,
     leverage: float,
     expenses: float,
     rel_transact_costs: float,
@@ -264,32 +278,16 @@ def get_derivatives_data(
     include_tax: bool,
 ) -> dict[str, pd.Series | list | float]:
     # get data of the underlying
-    result_dict = fetch_ticker_data(ticker)
-    price = result_dict["price"]
-    low = result_dict["low"]
-
-    # calculate the daily percentage change of the price to previous day close
-    pct_change = price.pct_change().dropna()
-    # calculate the daily percentage change of the low price to previous day close
-    pct_change_low = ((low - price.shift(1)) / price.shift(1)).dropna()
-    low = low.tail(constants.five_years)
-    price = price.tail(constants.five_years)
-    # get earning dates if not None (e.g. for indices)
-    if result_dict["earnings"] is not None:
-        earnings = result_dict["earnings"]["Reported EPS"]
-    else:
-        earnings = None
+    ticker_data = InvestmentData(ticker, risk_free_rate_for_ticker)
 
     # define the data dictionary
-    data_dict = {"name": result_dict["name"], "price": price, "earnings": earnings}
+    data_dict = {"name": ticker_data.result_dict["name"], "price": ticker_data.price, "earnings": ticker_data.earnings}
 
     # how have derivatives with kelly criterion > 5 performed in the past?
     # show results of fixed length holding_period day intervals
     kelly_lev = kelly_leverage(
-        pct_change, risk_free_rate_ticker, time_window=time_window
+        ticker_data.pct_change, risk_free_rate_for_ticker, time_window=time_window
     ).tail(constants.five_years)
-    pct_change = pct_change.tail(constants.five_years)
-    pct_change_low = pct_change_low[pct_change.index]
     # get days on which the kelly criterion was > leverage_signal
     dates_iloc = np.where(kelly_lev > leverage_signal)[0]
     # add leverage and dates to the return dictionary
@@ -308,14 +306,14 @@ def get_derivatives_data(
     else:
         # get all possible holding_period day interval returns
         returns_1x = [
-            performance_cumprod(pct_change.iloc[date : date + holding_period])
+            performance_cumprod(ticker_data.pct_change.iloc[date : date + holding_period])
             for date in dates_iloc
         ]
         returns_lev = [
             performance_cumprod(
                 factor.get_daily_returns(
-                    pct_change.iloc[date : date + holding_period],
-                    pct_change_low.iloc[date : date + holding_period],
+                    ticker_data.pct_change.iloc[date : date + holding_period],
+                    ticker_data.pct_change_low.iloc[date : date + holding_period],
                     leverage=leverage,
                 )
             )
@@ -326,8 +324,8 @@ def get_derivatives_data(
                 # assume that the knockout is bought during the day for
                 # the closing price of the previous day
                 knockout.get_daily_returns(
-                    price.iloc[max(date - 1, dates_iloc[0]) : date + holding_period],
-                    low.iloc[max(date - 1, dates_iloc[0]) : date + holding_period],
+                    ticker_data.price.iloc[max(date - 1, dates_iloc[0]) : date + holding_period],
+                    ticker_data.low.iloc[max(date - 1, dates_iloc[0]) : date + holding_period],
                     initial_leverage=leverage,
                 )
             )
@@ -421,12 +419,12 @@ def update_derivatives_performance_plot(
             y=price,
             mode="lines",
             name="Closing Price",
-            line=dict(color=st_blue),
+            line=dict(color=ST_BLUE),
         )
     )
     # add forecast with uncertainty bands
-    fig = forecast_band_plot(fig, forecast_current, st_darker_blue, "Current Forecast")
-    fig = forecast_band_plot(fig, forecast_old, st_dark_blue, "Previous Forecast")
+    fig = forecast_band_plot(fig, forecast_current, ST_DARKER_BLUE, "Current Forecast")
+    fig = forecast_band_plot(fig, forecast_old, ST_DARKER_BLUE, "Previous Forecast")
     # add unleveraged returns
     fig.add_trace(
         go.Scatter(
@@ -435,7 +433,7 @@ def update_derivatives_performance_plot(
             mode="markers",
             name="Underlying",
             yaxis="y2",
-            marker=dict(color=st_green, symbol="circle"),
+            marker=dict(color=ST_GREEN, symbol="circle"),
         )
     )
     # add leveraged factor returns
@@ -447,7 +445,7 @@ def update_derivatives_performance_plot(
             name=f"{leverage}x Factor",
             yaxis="y2",
             marker=dict(
-                color=st_dark_blue, symbol="triangle-up", opacity=opacities_lev
+                color=ST_DARK_BLUE, symbol="triangle-up", opacity=opacities_lev
             ),
         )
     )
@@ -459,7 +457,7 @@ def update_derivatives_performance_plot(
             mode="markers",
             name=f"{leverage}x Knockout",
             yaxis="y2",
-            marker=dict(color=st_darker_blue, symbol="square", opacity=opacities_ko),
+            marker=dict(color=ST_DARKER_BLUE, symbol="square", opacity=opacities_ko),
         )
     )
     # add zero line
@@ -472,7 +470,7 @@ def update_derivatives_performance_plot(
         x1=price.index[-1],
         y1=0,
         line=dict(
-            color=st_darker_blue,
+            color=ST_DARKER_BLUE,
             width=2,
             dash="dash",
         ),
@@ -487,7 +485,7 @@ def update_derivatives_performance_plot(
         x1=price.index[-holding_period],
         y1=max(max(returns_1x), max(returns_lev), max(returns_ko)),
         line=dict(
-            color=st_darker_blue,
+            color=ST_DARKER_BLUE,
             width=2,
             dash="dash",
         ),
@@ -500,7 +498,7 @@ def update_derivatives_performance_plot(
             mode="lines",
             name="Kelly Leverage Factor",
             yaxis="y3",
-            line=dict(color=st_red),
+            line=dict(color=ST_RED),
             visible="legendonly",
             legendgroup="group1",
         )
@@ -512,7 +510,7 @@ def update_derivatives_performance_plot(
             y=[leverage_signal, leverage_signal],
             mode="lines",
             yaxis="y3",
-            line=dict(color=st_red, dash="dash"),
+            line=dict(color=ST_RED, dash="dash"),
             visible="legendonly",
             legendgroup="group1",
             showlegend=False,
@@ -531,7 +529,7 @@ def update_derivatives_performance_plot(
         hovermode="x unified",
         yaxis=dict(
             title="Closing Prices",
-            title_font=dict(color=st_blue),
+            title_font=dict(color=ST_BLUE),
             hoverformat=".2f",
             fixedrange=False,
         ),
@@ -539,7 +537,7 @@ def update_derivatives_performance_plot(
             title=f"Returns @ Buy Date + {holding_period} Days [%]",
             side="right",
             overlaying="y",
-            title_font=dict(color=st_dark_blue),
+            title_font=dict(color=ST_DARK_BLUE),
             hoverformat=".2f",
             fixedrange=False,
         ),
@@ -548,7 +546,7 @@ def update_derivatives_performance_plot(
             side="right",
             overlaying="y",
             position=0.96,
-            title_font=dict(color=st_red),
+            title_font=dict(color=ST_RED),
             hoverformat=".2f",
             fixedrange=False,
         ),
@@ -582,7 +580,7 @@ def update_derivates_calibration_plot(
             y=returns_lev,
             name=f"{leverage}x Factor",
             box_visible=True,
-            line_color=st_dark_blue,
+            line_color=ST_DARK_BLUE,
             side="negative",
             points="all",
             pointpos=0.4,
@@ -595,7 +593,7 @@ def update_derivates_calibration_plot(
             y=returns_ko,
             name=f"{leverage}x Knockout",
             box_visible=True,
-            line_color=st_darker_blue,
+            line_color=ST_DARKER_BLUE,
             side="negative",
             points="all",
             pointpos=0.4,
@@ -612,7 +610,7 @@ def update_derivates_calibration_plot(
             mode="markers",
             name=f"{leverage}x Factor",
             marker=dict(
-                color=st_dark_blue, symbol="triangle-up", opacity=opacities_lev
+                color=ST_DARK_BLUE, symbol="triangle-up", opacity=opacities_lev
             ),
         ),
         row=1,
@@ -624,7 +622,7 @@ def update_derivates_calibration_plot(
             y=returns_ko,
             mode="markers",
             name=f"{leverage}x Knockout",
-            marker=dict(color=st_darker_blue, symbol="square", opacity=opacities_ko),
+            marker=dict(color=ST_DARKER_BLUE, symbol="square", opacity=opacities_ko),
         ),
         row=1,
         col=2,
@@ -641,7 +639,7 @@ def update_derivates_calibration_plot(
         x1=0,
         y1=y_upper_cutoff,
         line=dict(
-            color=st_green,
+            color=ST_GREEN,
             width=2,
             dash="dash",
         ),
@@ -658,7 +656,7 @@ def update_derivates_calibration_plot(
         x1=max(returns_1x),
         y1=0,
         line=dict(
-            color=st_darker_blue,
+            color=ST_DARKER_BLUE,
             width=2,
             dash="dash",
         ),
@@ -668,7 +666,7 @@ def update_derivates_calibration_plot(
 
     fig.update_xaxes(
         title="Underlying Returns [%]",
-        title_font=dict(color=st_green),
+        title_font=dict(color=ST_GREEN),
         hoverformat=".2f",
         row=1,
         col=2,
@@ -681,7 +679,7 @@ def update_derivates_calibration_plot(
         hovermode="x unified",
         yaxis=dict(
             title=f"{leverage}x Factor and Knockout Returns [%]",
-            title_font=dict(color=st_darker_blue),
+            title_font=dict(color=ST_DARKER_BLUE),
             hoverformat=".2f",
             range=[y_lower_cutoff, y_upper_cutoff],
         ),

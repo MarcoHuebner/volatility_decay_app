@@ -221,7 +221,7 @@ if __name__ == "__main__":
         # Ticker string input
         ticker_symbol = st.text_input("Ticker Symbol", value="^GSPC")
         # Slider for the risk free rate
-        risk_free_rate_ticker = st.slider(
+        risk_free_rate_for_ticker = st.slider(
             "Risk Free Yearly Return [%] (Costs)",
             min_value=0.0,
             max_value=8.0,
@@ -230,7 +230,7 @@ if __name__ == "__main__":
             key="ticker",
         )
         st.plotly_chart(
-            update_ticker_plot(ticker_symbol, risk_free_rate_ticker),
+            update_ticker_plot(ticker_symbol, risk_free_rate_for_ticker),
             use_container_width=True,
         )
         # Checkbox for tax
@@ -290,7 +290,7 @@ if __name__ == "__main__":
         # Calculate the performance of the derivatives
         data_dict = get_derivatives_data(
             ticker_symbol,
-            risk_free_rate_ticker,
+            risk_free_rate_for_ticker,
             derivative_leverage,
             derivative_expenses,
             rel_transact_costs,
