@@ -7,6 +7,7 @@ from abc import ABC, abstractmethod
 
 import numpy as np
 import pandas as pd
+
 from vol_decay.utils.utils import gmean, validate_inputs
 
 

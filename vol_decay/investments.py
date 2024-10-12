@@ -11,13 +11,13 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 from vol_decay import constants
-from vol_decay.utils.utils import performance_cumprod, plot_earnings_dates, xaxis_slider
-from vol_decay.utils.kelly_calculations import kelly_crit, kelly_leverage
 from vol_decay.utils.data_and_forecast import fetch_ticker_data, get_prophet_forecast
+from vol_decay.utils.kelly_calculations import kelly_crit, kelly_leverage
 from vol_decay.utils.simple_leveraged_products import (
     SimplifiedFactor,
     SimplifiedKnockout,
 )
+from vol_decay.utils.utils import performance_cumprod, plot_earnings_dates, xaxis_slider
 
 # define colours, loosely related to the streamlit default colours
 # https://discuss.streamlit.io/t/access-streamlit-default-color-palette/35737

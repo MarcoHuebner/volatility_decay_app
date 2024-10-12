@@ -7,7 +7,6 @@ and calculate forecasts using Prophet.
 import pandas as pd
 import streamlit as st
 import yfinance
-
 from prophet import Prophet
 
 from vol_decay import constants
