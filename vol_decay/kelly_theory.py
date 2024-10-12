@@ -6,9 +6,9 @@ heatmap.
 
 import numpy as np
 import plotly.graph_objects as go
-from src import constants
-from src.utils.kelly_calculations import kelly_crit, kelly_crit_mesh
-from src.utils.utils import leveraged_return_mesh
+from vol_decay import constants
+from vol_decay.utils.kelly_calculations import kelly_crit, kelly_crit_mesh
+from vol_decay.utils.utils import leveraged_return_mesh
 
 
 def update_result(
