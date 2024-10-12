@@ -34,6 +34,13 @@ def kelly_crit(
         raise TypeError(
             f"yearly_volatility must be a float, pd.Series, or pd.DataFrame but found {type(yearly_volatility)}."
         )
+    
+    # Ensure all inputs have the same length
+    if any(isinstance(data, (pd.Series, pd.DataFrame)) for data in (yearly_er, yearly_risk_free)):
+        lengths = [len(data) for data in (yearly_er, yearly_risk_free, yearly_volatility) if isinstance(data, (pd.Series, pd.DataFrame))]
+        if len(set(lengths)) != 1:
+            raise ValueError("All inputs must have the same length")
+        
     # NOTE: the factor of 100 corrects for the percentage values
     return pct * (yearly_er - yearly_risk_free) / yearly_volatility**2
 

@@ -30,7 +30,7 @@ ST_GREEN = "#21c354"
 
 
 class InvestmentData:
-    def __init__(self, ticker: str, risk_free_rate_for_ticker: float):
+    def __init__(self, ticker: str, risk_free_rate_for_ticker: float) -> None:
         # define the ticker and fetch the data
         self.ticker = ticker
         self.risk_free_rate_for_ticker = risk_free_rate_for_ticker
@@ -49,15 +49,15 @@ class InvestmentData:
             else None
         )
 
-    def get_forecast(self):
+    def get_forecast(self) -> tuple[pd.DataFrame, pd.DataFrame]:
         return get_prophet_forecast(self.price)
 
-    def get_kelly_leverage(self, time_window: int):
+    def get_kelly_leverage(self, time_window: int) -> pd.Series:
         return kelly_leverage(
             self.pct_change, self.risk_free_rate_for_ticker, time_window=time_window
         ).tail(constants.five_years)
 
-    def get_par(self):
+    def get_par(self) -> tuple[float, float]:
         # calculate the Percentage at Risk (PaR) in unlikely events (worst 1% and 5%)
         par_5 = np.percentile(self.pct_change.dropna(), 5)
         par_1 = np.percentile(self.pct_change.dropna(), 1)
