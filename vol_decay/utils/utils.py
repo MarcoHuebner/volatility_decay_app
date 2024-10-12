@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 
-from src import constants
+from vol_decay import constants
 
 
 def validate_inputs(series: pd.Series | pd.DataFrame) -> None:

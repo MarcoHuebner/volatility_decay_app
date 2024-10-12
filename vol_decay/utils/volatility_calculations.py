@@ -10,8 +10,8 @@ from arch import arch_model
 from deprecated import deprecated
 from tqdm import tqdm
 
-from src import constants
-from src.utils.utils import validate_inputs
+from vol_decay import constants
+from vol_decay.utils.utils import validate_inputs
 
 
 def empirical_annualized_volatility(

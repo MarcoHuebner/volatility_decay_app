@@ -7,7 +7,7 @@ from abc import ABC, abstractmethod
 
 import numpy as np
 import pandas as pd
-from src.utils.utils import gmean, validate_inputs
+from vol_decay.utils.utils import gmean, validate_inputs
 
 
 class SimpleLeveragedProducts(ABC):

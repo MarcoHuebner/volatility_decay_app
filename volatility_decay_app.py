@@ -21,21 +21,22 @@ streamlit
 
 import streamlit as st
 
-from src import constants
-from src.investments import (
+from vol_decay import constants
+from vol_decay.investments import (
     get_derivatives_data,
     update_derivates_calibration_plot,
     update_derivatives_performance_plot,
     update_ticker_plot,
 )
-from src.kelly_theory import update_kelly_plot, update_plot, update_result
-from src.stock_screener import (
+from vol_decay.kelly_theory import update_kelly_plot, update_plot, update_result
+from vol_decay.stock_screener import (
     compute_adr,
     kelly_selection,
     positive_return_selection,
     volatility_selection,
 )
-from src.utils.data_and_forecast import download_universe
+from vol_decay.utils.data_and_forecast import download_universe
+
 
 if __name__ == "__main__":
     # define the layout

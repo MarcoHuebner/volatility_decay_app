@@ -10,8 +10,8 @@ import yfinance
 
 from prophet import Prophet
 
-from src import constants
-from src.utils.volatility_calculations import empirical_annualized_volatility
+from vol_decay import constants
+from vol_decay.utils.volatility_calculations import empirical_annualized_volatility
 
 
 def fit_prophet_model(price: pd.Series, periods: int) -> pd.DataFrame:

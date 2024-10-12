@@ -10,11 +10,14 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from src import constants
-from src.utils.utils import performance_cumprod, plot_earnings_dates, xaxis_slider
-from src.utils.kelly_calculations import kelly_crit, kelly_leverage
-from src.utils.data_and_forecast import fetch_ticker_data, get_prophet_forecast
-from src.utils.simple_leveraged_products import SimplifiedFactor, SimplifiedKnockout
+from vol_decay import constants
+from vol_decay.utils.utils import performance_cumprod, plot_earnings_dates, xaxis_slider
+from vol_decay.utils.kelly_calculations import kelly_crit, kelly_leverage
+from vol_decay.utils.data_and_forecast import fetch_ticker_data, get_prophet_forecast
+from vol_decay.utils.simple_leveraged_products import (
+    SimplifiedFactor,
+    SimplifiedKnockout,
+)
 
 # define colours, loosely related to the streamlit default colours
 # https://discuss.streamlit.io/t/access-streamlit-default-color-palette/35737
@@ -206,7 +209,9 @@ def update_ticker_plot(ticker: str, risk_free_rate_for_ticker: float) -> go.Figu
 
     # calculate the Kelly Criterion with maximum of the three volatilities
     average_vol_30d = ticker_data.result_dict["30_d_volatility_vix"].iloc[-52:].mean()
-    average_daily_return = ticker_data.pct_change.iloc[-constants.five_years :].mean() * 100
+    average_daily_return = (
+        ticker_data.pct_change.iloc[-constants.five_years :].mean() * 100
+    )
     max_vol = max(
         ticker_data.result_dict["ann_volatility"].iloc[-1],
         # result_dict["garch_volatility"].iloc[-1],
@@ -224,7 +229,7 @@ def update_ticker_plot(ticker: str, risk_free_rate_for_ticker: float) -> go.Figu
     lev_20 = 20 / ticker_data.result_dict["ann_volatility"].iloc[-1]
     # calculate the Percentage at Risk (PaR)
     par_5, par_1 = ticker_data.get_par()
- 
+
     # update layout
     fig.update_layout(
         title=f"<span style='font-size: 24px;'>Current Price and"
@@ -281,7 +286,11 @@ def get_derivatives_data(
     ticker_data = InvestmentData(ticker, risk_free_rate_for_ticker)
 
     # define the data dictionary
-    data_dict = {"name": ticker_data.result_dict["name"], "price": ticker_data.price, "earnings": ticker_data.earnings}
+    data_dict = {
+        "name": ticker_data.result_dict["name"],
+        "price": ticker_data.price,
+        "earnings": ticker_data.earnings,
+    }
 
     # how have derivatives with kelly criterion > 5 performed in the past?
     # show results of fixed length holding_period day intervals
@@ -306,7 +315,9 @@ def get_derivatives_data(
     else:
         # get all possible holding_period day interval returns
         returns_1x = [
-            performance_cumprod(ticker_data.pct_change.iloc[date : date + holding_period])
+            performance_cumprod(
+                ticker_data.pct_change.iloc[date : date + holding_period]
+            )
             for date in dates_iloc
         ]
         returns_lev = [
@@ -324,8 +335,12 @@ def get_derivatives_data(
                 # assume that the knockout is bought during the day for
                 # the closing price of the previous day
                 knockout.get_daily_returns(
-                    ticker_data.price.iloc[max(date - 1, dates_iloc[0]) : date + holding_period],
-                    ticker_data.low.iloc[max(date - 1, dates_iloc[0]) : date + holding_period],
+                    ticker_data.price.iloc[
+                        max(date - 1, dates_iloc[0]) : date + holding_period
+                    ],
+                    ticker_data.low.iloc[
+                        max(date - 1, dates_iloc[0]) : date + holding_period
+                    ],
                     initial_leverage=leverage,
                 )
             )

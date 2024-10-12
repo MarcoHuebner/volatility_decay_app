@@ -6,7 +6,7 @@ Kelly criterion calculations for different levels of complexity data.
 import numpy as np
 import pandas as pd
 
-from src.utils.utils import validate_inputs, gmean
+from vol_decay.utils.utils import validate_inputs, gmean
 
 pct = 100.0
 
