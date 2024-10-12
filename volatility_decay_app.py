@@ -364,12 +364,14 @@ if __name__ == "__main__":
         adj_close_data = data.xs("Adj Close", level=0, axis=1).iloc[-(n_days_60 + 1) :]
         adj_close_data = adj_close_data[filtered_cols]
         n_assets = adj_close_data.shape[1]
+        st.markdown("", unsafe_allow_html=True)
         st.write(
             f"### Past {n_days_60} Days of Adjusted Close Data for {n_assets} Assets"
         )
         st.dataframe(data=adj_close_data.tail(10))
 
         # Header for the stock universe indicators
+        st.markdown("", unsafe_allow_html=True)
         st.write("## Indicators for the Stock Universe")
         st.markdown(
             """
