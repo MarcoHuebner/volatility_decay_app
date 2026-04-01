@@ -349,7 +349,8 @@ if __name__ == "__main__":
         # Display the past 60 days of the adjusted close data
         n_days_60 = 60
         adj_close_data = data.xs("Adj Close", level=0, axis=1).iloc[-(n_days_60 + 1) :]
-        adj_close_data = adj_close_data[filtered_cols]
+        valid_cols = [col for col in filtered_cols if col in adj_close_data.columns]
+        adj_close_data = adj_close_data[valid_cols]
         n_assets = adj_close_data.shape[1]
         st.markdown("", unsafe_allow_html=True)
         st.write(
