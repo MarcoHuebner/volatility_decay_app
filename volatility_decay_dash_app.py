@@ -269,7 +269,7 @@ data = [
         zmid=0,
         zmin=-15,
         colorscale="RdBu",
-        colorbar=dict(title="Gain over Unleveraged ETF [%]", titleside="right"),
+        colorbar=dict(title=dict(text="Gain over Unleveraged ETF [%]")),
     )
 ]
 data_contour = [
@@ -281,7 +281,7 @@ data_contour = [
         zmid=0,
         zmin=-15,
         colorscale="RdBu",
-        colorbar=dict(title="Gain over Unleveraged ETF [%]", titleside="right"),
+        colorbar=dict(title=dict(text="Gain over Unleveraged ETF [%]")),
     )
 ]
 

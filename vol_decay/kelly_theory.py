@@ -41,9 +41,7 @@ data = [
         zmid=0,
         zmin=zmin,
         colorscale="RdBu",
-        colorbar=dict(
-            title="Outperformance LETF over Unleveraged ETF [%]", titleside="right"
-        ),
+        colorbar=dict(title=dict(text="Outperformance LETF over Unleveraged ETF [%]")),
     )
 ]
 data_contour = [
@@ -61,9 +59,7 @@ data_contour = [
         zmid=0,
         zmin=zmin,
         colorscale="RdBu",
-        colorbar=dict(
-            title="Outperformance LETF over Unleveraged ETF [%]", titleside="right"
-        ),
+        colorbar=dict(title=dict(text="Outperformance LETF over Unleveraged ETF [%]")),
     )
 ]
 
@@ -115,7 +111,7 @@ data_f = [
         zmid=1,
         zmax=zmax_f,
         colorscale="RdylGn_r",
-        colorbar=dict(title="Ideal Leverage Factor", titleside="right"),
+        colorbar=dict(title=dict(text="Ideal Leverage Factor")),
     )
 ]
 data_f_contour = [
@@ -129,7 +125,7 @@ data_f_contour = [
         zmid=1,
         zmax=zmax_f,
         colorscale="RdylGn_r",
-        colorbar=dict(title="Ideal Leverage Factor", titleside="right"),
+        colorbar=dict(title=dict(text="Ideal Leverage Factor")),
     )
 ]
 

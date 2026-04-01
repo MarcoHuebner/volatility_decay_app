@@ -138,9 +138,7 @@ if __name__ == "__main__":
             step=0.1,
         )
         # Placeholder for the graph
-        st.plotly_chart(
-            update_plot(data_source, leverage, ter, libor), use_container_width=True
-        )
+        st.plotly_chart(update_plot(data_source, leverage, ter, libor))
 
         # Header for the Kelly Criterion plot
         st.markdown("", unsafe_allow_html=True)
@@ -171,10 +169,7 @@ if __name__ == "__main__":
             step=0.25,
         )
         # Placeholder for the graph
-        st.plotly_chart(
-            update_kelly_plot(data_source_kelly, risk_free_rate),
-            use_container_width=True,
-        )
+        st.plotly_chart(update_kelly_plot(data_source_kelly, risk_free_rate))
 
     with tab2:
         # Header for the ticker price data plot
@@ -230,10 +225,7 @@ if __name__ == "__main__":
             step=0.25,
             key="ticker",
         )
-        st.plotly_chart(
-            update_ticker_plot(ticker_symbol, risk_free_rate_for_ticker),
-            use_container_width=True,
-        )
+        st.plotly_chart(update_ticker_plot(ticker_symbol, risk_free_rate_for_ticker))
         # Checkbox for tax
         include_tax = st.checkbox(
             "Include Taxes on Capital Gains (incl. 'Solidaritätszuschlag')", value=True
@@ -319,18 +311,12 @@ if __name__ == "__main__":
             + f" trading days (KO/ Factor): 1:{reward_ko:.2f}/ 1:{reward_f:.2f}"
             + r" (take the inverse of this ratio as an estimate for $b$ in the Kelly formula)."
         )
-        st.plotly_chart(
-            derivates_fig,
-            use_container_width=True,
-        )
+        st.plotly_chart(derivates_fig)
         # Add a calibration plot for the derivatives performance
         calibration_fig = update_derivates_calibration_plot(
             data_dict, derivative_leverage, holding_period
         )
-        st.plotly_chart(
-            calibration_fig,
-            use_container_width=True,
-        )
+        st.plotly_chart(calibration_fig)
 
     with tab3:
         # Header for the Stock Screener
