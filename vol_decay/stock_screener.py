@@ -1,10 +1,11 @@
 """
-Defines preprocessing functions for stock selection based on the Kelly criterion, 
+Defines preprocessing functions for stock selection based on the Kelly criterion,
 average daily range, volatility, and positive returns.
 
 """
 
 import pandas as pd
+
 from vol_decay.utils.kelly_calculations import kelly_stock_universe
 from vol_decay.utils.utils import performance_cumprod
 from vol_decay.utils.volatility_calculations import empirical_annualized_volatility

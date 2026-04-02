@@ -6,11 +6,11 @@ pip install dash dash-core-components dash-html-components dash-renderer
 
 assets folder: Contains style.css file for styling the dashboard
 
-Based on a [reddit](https://www.reddit.com/r/HFEA/comments/tue7n6/the_volatility_decay_equation_with_verification/) 
+Based on a [reddit](https://www.reddit.com/r/HFEA/comments/tue7n6/the_volatility_decay_equation_with_verification/)
 post, make an interactive visualization to show the effect of the volatility decay.
 
-The results show the (somewhat) quadratic (/ logarithmic) volatility drag along the volatility axis, together with 
-(somewhat) quadratic (/ logarithmic) scaling profit region decrease with increased leverage factor. Further sources 
+The results show the (somewhat) quadratic (/ logarithmic) volatility drag along the volatility axis, together with
+(somewhat) quadratic (/ logarithmic) scaling profit region decrease with increased leverage factor. Further sources
 describing the quadratic behaviour:
 - [Blogpost](https://www.afrugaldoctor.com/home/leveraged-etfs-and-volatility-decay-part-2)
 - [(Detailed) Journal Article, also mentioned in the Blogpost](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=1664823)

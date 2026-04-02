@@ -1,11 +1,11 @@
 """
 This module contains the code for the volatility decay Streamlit App.
 
-Based on a [reddit](https://www.reddit.com/r/HFEA/comments/tue7n6/the_volatility_decay_equation_with_verification/) 
+Based on a [reddit](https://www.reddit.com/r/HFEA/comments/tue7n6/the_volatility_decay_equation_with_verification/)
 post, make an interactive visualization to show the effect of the volatility decay.
 
-The results show the (somewhat) quadratic (/ logarithmic) volatility drag along the volatility axis, together with 
-(somewhat) quadratic (/ logarithmic) scaling profit region decrease with increased leverage factor. Further sources 
+The results show the (somewhat) quadratic (/ logarithmic) volatility drag along the volatility axis, together with
+(somewhat) quadratic (/ logarithmic) scaling profit region decrease with increased leverage factor. Further sources
 describing the quadratic behaviour:
 - [Blogpost](https://www.afrugaldoctor.com/home/leveraged-etfs-and-volatility-decay-part-2)
 - [(Detailed) Journal Article, also mentioned in the Blogpost](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=1664823)
@@ -36,7 +36,6 @@ from vol_decay.stock_screener import (
     volatility_selection,
 )
 from vol_decay.utils.data_and_forecast import download_universe
-
 
 if __name__ == "__main__":
     # define the layout
@@ -102,15 +101,13 @@ if __name__ == "__main__":
         # Header for the plot
         st.markdown("", unsafe_allow_html=True)
         st.write("## Gain of the LETF over the Unleveraged ETF")
-        st.markdown(
-            """
+        st.markdown("""
             The difference in profit of the hypothetical leveraged ETF is 
             compared to the unleveraged ETF below. It becomes clear that 
             the profit does not increase linearly with leverage and the 
             margin of error becomes smaller and smaller, especially with 
             higher leverage.
-            """
-        )
+            """)
         # Dropdown for the plot style
         data_source = st.selectbox("Plot Style", ["Heatmap", "Contour"], index=1)
         # Slider for leverage
@@ -361,14 +358,12 @@ if __name__ == "__main__":
         # Header for the stock universe indicators
         st.markdown("", unsafe_allow_html=True)
         st.write("## Indicators for the Stock Universe")
-        st.markdown(
-            """
+        st.markdown("""
             ### Kelly Criterion \n
             Filter for stocks with a low volatility compared to their past 60 day 
             (30 day) returns and display the average daily range (ADR) of the 
             corresponding stocks.
-            """
-        )
+            """)
 
         # Slider for the risk free rate
         risk_free_rate_u = st.slider(
@@ -420,13 +415,11 @@ if __name__ == "__main__":
         col4.write(f"Average daily range [%] in the past {n_days_30} days:")
         col4.dataframe(data=adr_30[largest_20_30.index])
 
-        st.markdown(
-            """
+        st.markdown("""
             ### Average Daily Range \n
             Filter for stocks with a high average daily range (ADR) in the past
             60 days (30 days) and a positive trend.
-            """
-        )
+            """)
 
         # Filter for a positive trend in the past n_days
         ret_60, ret_10_60 = positive_return_selection(adj_close_data, n_days_60)
@@ -449,13 +442,11 @@ if __name__ == "__main__":
         col4.write(f"Return [%] in the past {n_days_30} days:")
         col4.dataframe(data=ret_30[top_adr_30.index])
 
-        st.markdown(
-            """
+        st.markdown("""
             ### Custom Filters \n
             Filter stocks for custom Kelly leverage, average daily range (ADR), 
             and volatility in the past 60 days (30 days).
-            """
-        )
+            """)
         # Slider for the Kelly filter
         kelly_filter = st.slider(
             "Min. Kelly Leverage [%]",

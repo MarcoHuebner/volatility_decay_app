@@ -1,11 +1,12 @@
 """
-Define the functions to update the Kelly Criterion heatmap and the LETF outperformance 
+Define the functions to update the Kelly Criterion heatmap and the LETF outperformance
 heatmap.
 
 """
 
 import numpy as np
 import plotly.graph_objects as go
+
 from vol_decay import constants
 from vol_decay.utils.kelly_calculations import kelly_crit, kelly_crit_mesh
 from vol_decay.utils.utils import leveraged_return_mesh
